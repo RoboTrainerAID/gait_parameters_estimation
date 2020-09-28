@@ -1,0 +1,9 @@
+Header header
+float64 transformed_x
+float64 smoothed_x
+float64 bandpassed_x
+float64 harmonics_x
+float64 gait_freq
+float64 error_x
+float64 peak
+float64 valley

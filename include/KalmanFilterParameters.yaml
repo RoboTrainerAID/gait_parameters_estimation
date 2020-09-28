@@ -1,0 +1,99 @@
+# Kalman filter params:
+  # dt="time between two updates"
+  # n="number of states"
+  # m="number of measurements"
+  # A="System dynamics matrix: nxn"
+  # At="System dynamics matrix (dynamic part): nxn"
+  # C="Output matrix: mxn"
+  # Q="Process noise covariance: nxn"
+  # Q_coeff="coefficients of the dynamic part of Q"
+  # Q_exponent="exponents of the time differnce"
+  # Q_variance="variance of the process noise"
+  # R="Measurement noise covariance: mxm"
+  # P="Estimate error covariance: nxn"
+  # x0="start state vector"
+  
+  # KalmanFilter="default namespace for parameters" -> configure() can be used without arguments
+  
+  # x0 can be empty
+  # if At is empty or not valid -> update with delta_t is not available
+  # if Q_coeff is empty or not valid -> Q_exponent and Q_variance are not considered and 
+  #     update of the Q matrix is not available
+
+# default namespace, parameters are set appropriate 
+
+KalmanFilter:
+  dt: 1 # will not be used due to unstable processing time
+  n: 6
+  m: 3  
+  dynamics: true
+  # n x n
+  A: [1, 0, 0, 0, 0, 0,
+      0, 1, 0, 0, 0, 0,
+      0, 0, 1, 0, 0, 0,
+      0, 0, 0, 1, 0, 0,
+      0, 0, 0, 0, 1, 0,
+      0, 0, 0, 0, 0, 1]
+  # dynamic part , number is the order
+  At: [0, 0, 0, 1, 0, 0,
+       0, 0, 0, 0, 1, 0,
+       0, 0, 0, 0, 0, 1, 
+       0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0,
+       0, 0, 0, 0, 0, 0]
+  # m x n
+  C: [1, 0, 0, 0, 0, 0, 
+      0, 1, 0, 0, 0, 0,
+      0, 0, 1, 0, 0, 0,]
+  # n x n
+  #  Q = E(w w^T) (w is process noise vector)
+  # This matrix is empty because only dynamic parts are needed
+  Q: [0,    0,    0,    0,    0,    0, 
+      0,    0,    0,    0,    0,    0, 
+      0,    0,    0,    0,    0,    0,
+      0,    0,    0,    0,    0,    0,
+      0,    0,    0,    0,    0,    0,
+      0,    0,    0,    0,    0,    0]
+      
+  Q_coeff: [0.25,   0,      0,      0.5,    0,      0, 
+            0,      0.25,   0,      0,      0.5,    0, 
+            0,      0,      0.25,   0,      0,      0.5,
+            0.5,    0,      0,      1,      0,      0,
+            0,      0.5,    0,      0,      1,      0,
+            0,      0,      0.5,    0,      0,      1]
+      
+  Q_exponent:  [4,    0,    0,    3,    0,    0, 
+                0,    4,    0,    0,    3,    0, 
+                0,    0,    4,    0,    0,    3,
+                3,    0,    0,    2,    0,    0,
+                0,    3,    0,    0,    2,    0,
+                0,    0,    3,    0,    0,    2]
+      
+  Q_variance: 0.25
+      
+      
+  # m x m
+  ## define r R = E(vv^T) (v is meassurement noise vector)
+  #R: [0.000008,  0,        0,
+      #0,         0.000001, 0,
+      #0,         0,        0.000001]
+      
+      # define r R = E(vv^T) (v is meassurement noise vector)
+  R: [0.001,      0,        0,
+      0,         0.001,     0,
+      0,         0,        0.001]
+  
+      
+      
+  # n x n identity matrix is probably good enough
+  P: [1,   0,   0,   0,   0,   0, 
+      0,   1,   0,   0,   0,   0, 
+      0,   0,   1,   0,   0,   0,
+      0,   0,   0,   1,   0,   0,
+      0,   0,   0,   0,   1,   0,
+      0,   0,   0,   0,   0,   1]
+  # n (init state vector)
+  x0: [0, 0, 0, 0, 0, 0]
+#params: {number_of_elements_: 5}
+
+# state vector = [x,y,z,x',y',z'] (where w' is velocity in w direction)

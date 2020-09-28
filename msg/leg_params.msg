@@ -1,0 +1,6 @@
+float64 stride_length
+float64 step_length
+float64 cadence
+float64 swing_time
+float64 stance_time
+float64 stride_intervall

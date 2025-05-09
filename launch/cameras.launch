@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<launch>
+
+    <arg name="launch_lower_legs_camera" default="false"/>
+    <arg name="launch_upper_body_camera" default="false"/>
+
+    <arg name="name" default="lower_legs_camera"/>
+
+    <!-- Transforms for standalone launch -->
+    <node name="robot_lower_legs_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="-0.031 -0.000 0.731 -0.423 -0.000 0.906 -0.000 base_link lower_legs_camera_link" />
+    <node name="lower_legs_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 -0.02 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_depth_frame" />
+    <node name="lower_legs_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 lower_legs_camera_depth_frame lower_legs_camera_depth_optical_frame" />
+    <node name="lower_legs_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_rgb_optical_frame " />
+    
+    <!-- Lower leg tracking with 3D camera -->
+    <include if="$(arg launch_lower_legs_camera)" file="$(find openni2_launch)/launch/openni2.launch" >
+        <arg name="camera" value="lower_legs_camera"/>
+        <arg name="device_id" value="1@0"/>
+        <!-- <arg name="depth_mode" value="2"/> -->
+
+        <!-- <arg name="data_skip" default="0"/> -->
+        <arg name="num_worker_threads" default="4"/>
+		<arg name="rgb_frame_id" value="$(arg camera)_rgb_optical_frame"/>
+		<arg name="depth_frame_id" value="$(arg camera)_depth_optical_frame"/>
+		<arg name="publish_tf" value="true"/>
+        <arg name="depth_registration" value="true"/>
+        <!-- <arg name="rgb_processing" value="false"/> 
+        <arg name="debayer_processing" value="false" /> -->
+        <arg name="ir_processing" value="false" />
+        <arg name="depth_processing" value="true" />
+        <arg name="depth_registered_processing" value="true" />
+        <arg name="disparity_processing" value="false" />
+        <arg name="disparity_registered_processing" value="false" />
+    </include>
+
+
+    <!-- Transforms for standalone launch -->
+    <node name="robot_upper_body_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="0.197 -0.000 1.163 0.065 0.000 0.998 -0.000 base_link upper_body_camera_link" />
+    <node name="upper_body_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 -0.02 0 0 0 0 1 upper_body_camera_link upper_body_camera_depth_frame" />
+    <node name="upper_body_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 upper_body_camera_depth_frame upper_body_camera_depth_optical_frame" />
+    <node name="upper_body_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 upper_body_camera_link upper_body_camera_rgb_optical_frame " />
+    
+    <include if="$(arg launch_upper_body_camera)" file="$(find openni2_launch)/launch/openni2.launch" >
+        <arg name="camera" value="upper_body_camera"/>
+        <arg name="device_id" value="3@0"/>
+        <arg name="num_worker_threads" default="4"/>
+		<arg name="rgb_frame_id" value="$(arg camera)_rgb_optical_frame"/>
+		<arg name="depth_frame_id" value="$(arg camera)_depth_optical_frame"/>
+		<arg name="publish_tf" value="true"/>
+    </include>
+
+
+    <?xml version="1.0"?>
+    <launch>
+    <arg name="name" default="lower_legs_camera"/>
+
+    <!-- Lower leg tracking with 3D camera -->
+    <!-- Launch arguments https://wiki.ros.org/openni_launch -->
+    <include file="$(find openni2_launch)/launch/openni2.launch" >
+        <arg name="camera" value="$(arg name)"/>
+        <arg name="device_id" value="1@0"/>
+        <!-- <arg name="depth_mode" value="2"/> -->
+        <!-- <arg name="data_skip" default="0"/> -->
+        <arg name="num_worker_threads" default="4"/>
+		<arg name="rgb_frame_id" value="$(arg name)_rgb_optical_frame"/>
+		<arg name="depth_frame_id" value="$(arg name)_depth_optical_frame"/>
+		<arg name="publish_tf" value="true"/>
+        <arg name="depth_registration" value="true"/>
+
+        <!-- Arguments from rgbd_launch https://wiki.ros.org/rgbd_launch -->
+        <arg name="rgb_processing" value="false"/> 
+        <arg name="debayer_processing" value="false" />
+        <arg name="ir_processing" value="false" />
+        <arg name="depth_processing" value="false" />
+        <arg name="depth_registered_processing" value="false" />
+        <arg name="disparity_processing" value="false" />
+        <arg name="sw_registered_processing" value="false" />
+        <arg name="hw_registered_processing" value="false" />
+    </include>
+    
+    <!-- <include file="$(find openni2_launch)/launch/openni2.launch" >
+        <arg name="camera" value="upper_body_camera"/>
+        <arg name="device_id" value="3@0"/>
+    </include> -->
+
+
+
+
+</launch>
+
+</launch>

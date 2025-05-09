@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+
+  <node name="extract_mobile_robot_base" pkg="ipr_helpers" type="extract_mobile_robot_tf">
+    <param name="rate" value="500.0" type="double" />
+    <param name="root_frame" value="map" />
+    <param name="child_frame" value="base_link" />
+  </node>
+</launch>

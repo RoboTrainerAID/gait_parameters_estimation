@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>    
+    <node pkg="camera_lower_leg_tracking" name="feet_detection" type="feet_detection_node" output="screen">
+        <param name="input_pointcloud_topic" value="/lower_legs_camera/depth_registered/points" />
+        <param name="camera_depth_frame_id" value="lower_legs_camera_depth_optical_frame" />
+        <param name="ground_level" value="0.005" />
+        <param name="point_size_post_init" value="0.01" />
+        <param name="point_size_pre_init" value="0.001" />
+        <param name="min_cluster_size_post_init" value="200" />
+        <param name="min_cluster_size_pre_init" value="2000" />
+        <param name="cluster_tolerance" value="0.03" />
+        <param name="icp_fitness_threshhold" value="0.0001" />
+        <param name="init_frontal_capture_frame" value="50" />
+        <param name="init_side_captured_frames" value="5" />
+        <param name="init_side_capture_start" value="30" />
+        <param name="foot_length" value="0.32" />
+        <param name="foot_height" value="0.14" />
+        <param name="perform_side_init" value="-1" />
+        <rosparam command="load" file="$(find camera_lower_leg_tracking)/include/KalmanFilterParameters.yaml"/>
+    </node>
+    
+</launch>

@@ -1,0 +1,41 @@
+<launch>
+    
+    <arg name="from_bags" default="false"/>
+
+    <include if="$(arg from_bags)" file="$(find gait_parameters_estimation)/launch/publish_urdf.launch"/>
+
+    <!-- TOE DETECTION WITH LOWER DEPTH CAMERA -->
+        <include file="$(find gait_parameters_estimation)/launch/cameras.launch">
+            <arg name="launch_lower_legs_camera" value="true"/>
+        </include>
+        <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" />
+        <!-- <include file="$(find gait_parameters_estimation)/launch/feet_detection.launch" /> -->
+
+    <!-- LEG DETECTION WITH LASERSCANNER -->
+        <include file="$(find gait_parameters_estimation)/launch/leg_tracker_one_person.launch" />
+
+    <!-- SHOULDER DETECTION WITH UPPER DEPTH CAMERA AND OPENPOSE -->
+        <!-- <include file="$(human_body_detection)/launch/human_body_detection_asus.launch" /> -->
+
+        <!-- Transforms for standalone launch -->
+        <!-- <node name="robot_fts_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 -0.866 0.500 fts_base_link fts_reference_link" /> -->
+        
+        <!-- <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
+            <rosparam command="load" file="$(find gait_parameters_estimation)/include/KalmanFilterParameters.yaml"/>
+            <remap from="/base/sensor_data" to="base/output_data"/>
+            <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
+        </node> -->
+
+    <!-- FORCE DETECTION WITH FTS SENSOR -->
+
+    <!-- GAIT ESTIMATION -->
+        <include file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" />
+        <!-- <include file="$(find gait_parameters_estimation)/launch/gait_estimation.launch" /> -->
+    
+        <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
+            <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+            <remap from="/base/sensor_data" to="base/output_data"/>
+            <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
+        </node>
+
+</launch>

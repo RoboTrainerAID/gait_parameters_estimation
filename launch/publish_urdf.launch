@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<!-- Original File from robotrainer_bringup/robot/sr3_on_startup.launch -->
+<launch>
+    
+    <!-- rosservice call /robotrainer_hw/set_state "{angular_key: X, linear_key: X, without_controller_updates: True}" -->
+
+    <arg name="robot" value="robotrainer2"/>
+
+    <arg name="base_wheel_config_yaml" default="$(find robotrainer_config)/hardware/rt2_base_wheel_configuration.yaml"/>
+
+    <!-- RoboTrainer config uploads -->
+    <group ns="base">
+        <rosparam command="load" file="$(arg base_wheel_config_yaml)"/>
+    </group>
+
+
+    <!-- upload robot description -->
+    <include file="$(find cob_hardware_config)/upload_robot.launch">
+        <arg name="robot" value="$(arg robot)"/>
+    </include>
+    <!-- upload default configuration parameters -->
+	<include file="$(find cob_default_robot_config)/upload_param.launch">
+		<arg name="robot" value="$(arg robot)"/>
+	</include>
+
+    <include file="$(find cob_bringup)/tools/robot_state_publisher.launch">
+        <arg name="robot" value="$(arg robot)"/>
+    </include>
+
+    <!--  RoboTrainer-specific stuff -->
+    <!-- Läuft das schon? wird woanders gestartet? -->
+                            <!-- send urdf to param server -->
+                            <arg name="scenario_parameters" value="sim:=false"/>
+                            <param name="sensor_description" command="$(find xacro)/xacro --inorder '$(find ati_force_torque)/description/urdf/sensor_mini58.urdf.xacro' $(arg scenario_parameters)"/>
+
+                            <!-- sensor state publisher -->
+                            <node ns="fts" pkg="robot_state_publisher" type="robot_state_publisher" name="sensor_state_publisher">
+                                <param name="publish_frequency" type="double" value="200.0" />
+                                <param name="tf_prefix" type="string" value="" />
+                                <remap from="robot_description" to="sensor_description" />
+                            </node>
+
+    <node ns="robotrainer_hw" name="robotrainer_state_publisher" pkg="robotrainer_controllers" type="robotrainer_rear_wheels_state_publisher.py">
+        <param name="frequency" value="1"/>
+        <remap from="joint_states" to="/robotrainer_hw/joint_states"/>
+    </node>
+
+</launch>

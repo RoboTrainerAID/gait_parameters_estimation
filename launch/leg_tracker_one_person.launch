@@ -1,0 +1,12 @@
+<launch>
+    <arg name="laser_scan_topic" default="/base_laser_back/scan"/>
+  
+    <node pkg="leg_tracker" type="leg_tracker" name="leg_detection" output="screen">
+      <rosparam command="load" file="$(find leg_tracker)/config/general_parameters.yaml"/>
+      <rosparam command="load" file="$(find leg_tracker)/config/parameter_one_person.yaml"/>
+      <rosparam command="load" file="$(find leg_tracker)/config/kalman_filter.yaml"/>
+  
+      <remap from="/scan_rear_raw" to="$(arg laser_scan_topic)"/>
+    </node>
+  
+  </launch>

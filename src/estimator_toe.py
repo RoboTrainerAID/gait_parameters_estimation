@@ -25,29 +25,33 @@ class EstimatorToe(EstimatorBase):
     #Listen to Topic for toe position
     def toe_sync(self, right_toe, left_toe):
         self._tlock.acquire()
-        self._right_toe.append(right_toe)
-        self._left_toe.append(left_toe)
-        if len(self._right_toe) > 3:
-            fs = self.est_fs(self._right_toe[-3:])
-            if fs > 0.0:
-                self._fs = (0.1 * fs + 0.9 * self._fs)
-        self._tlock.release()
+        try:
+            self._right_toe.append(right_toe)
+            self._left_toe.append(left_toe)
+            if len(self._right_toe) > 3:
+                fs = self.est_fs(self._right_toe[-3:])
+                if fs > 0.0:
+                    self._fs = (0.1 * fs + 0.9 * self._fs)
+        finally:
+            self._tlock.release()
 
     def get_window(self):
         step_percentage = self._window_step / self._window_size
         cutoff_r = len(self._right_toe) * step_percentage
         cutoff_l = len(self._left_toe) * step_percentage
         self._tlock.acquire()
-        win_r = np.array(self._right_toe, copy = True)
-        win_l = np.array(self._left_toe, copy = True)
-        if win_r.shape[0] == 0 or win_l.shape[0] == 0:
+        try:
+            win_r = np.array(self._right_toe, copy = True)
+            win_l = np.array(self._left_toe, copy = True)
+            if win_r.shape[0] == 0 or win_l.shape[0] == 0:
+                return None
+            else:
+                self._right_toe = self._right_toe[int(cutoff_r):]
+                self._left_toe = self._left_toe[int(cutoff_l):]
+                return [win_l, win_r]
+        finally:
             self._tlock.release()
-            return None
-        else:
-            self._right_toe = self._right_toe[int(cutoff_r):]
-            self._left_toe = self._left_toe[int(cutoff_l):]
-            self._tlock.release()
-            return [win_l, win_r]
+
 
     #Synchronize Toe position so same amount of measurement for right and left position is given
     def remove_toes(self, smaller, bigger):
@@ -89,19 +93,25 @@ class EstimatorToe(EstimatorBase):
         toe_diff = np.sqrt(np.array([((ltoe_window[i].point.x - rtoe_window[i].point.x) ** 2 + (ltoe_window[i].point.y - rtoe_window[i].point.y) ** 2) for i in range(len(rtime))]))
 
         order = 3
+        value_error = False
          #preprocess data by applying lowpass filter to smoothe and bandpass filter to filter signals outside of gait cadence
         try:
-            ltoe_smoothed = prep.smooth_data(ltoe_rms, self._highcut / 2.0, self._fs, win_size = 0.3)
-            rtoe_smoothed = prep.smooth_data(rtoe_rms, self._highcut /2.0, self._fs, win_size = 0.3)
+            # ltoe_smoothed = prep.smooth_data(ltoe_rms, self._highcut / 2.0, self._fs, win_size = 0.3)
+            # rtoe_smoothed = prep.smooth_data(rtoe_rms, self._highcut /2.0, self._fs, win_size = 0.3)
             toe_diff_smoothed = prep.smooth_data(toe_diff, self._highcut, self._fs, win_size = 0.3)
+        except ValueError as e:
+            rospy.logerr("ValueError in smooth_data: %s", str(e))
+            value_error = True
 
-            td_bandpassed = prep.butter_bandpass_filter(toe_diff_smoothed, self._lowcut / 2.0, self._highcut, self._fs, order)
-        except:
-            ltoe_smoothed = prep.smooth_data(ltoe_rms, self._highcut / 2.0, self._fs, win_size = 0.3)
-            rtoe_smoothed = prep.smooth_data(rtoe_rms, self._highcut / 2.0, self._fs, win_size = 0.3)
-            toe_diff_smoothed = prep.smooth_data(toe_diff, self._highcut, self._fs, win_size = 0.3)
-
-            td_bandpassed = prep.butter_bandpass_filter(toe_diff_smoothed, self._lowcut / 2.0, self._highcut, self._fs, order - 1)
+        if not value_error:
+            try:
+                td_bandpassed = prep.butter_bandpass_filter(toe_diff_smoothed, self._lowcut / 2.0, self._highcut, self._fs, order)
+            except:
+                try:
+                    td_bandpassed = prep.butter_bandpass_filter(toe_diff_smoothed, self._lowcut / 2.0, self._highcut, self._fs, order - 1)
+                except ValueError as e:
+                    rospy.logerr("ValueError in smooth_data: %s", str(e))
+                    value_error = True
 
         params = gp()
         params.header.stamp = rospy.Time.now()
@@ -111,7 +121,7 @@ class EstimatorToe(EstimatorBase):
         debugs = []
         
         #check if robot moved by velocity, if under threshold set cadence to zero
-        if all(s < 0.2 for s in self._window_vel):
+        if all(s < 0.2 for s in self._window_vel) or value_error:
             params.cadence = 0.0
             params.cadence_avg = 0.0
         else:
@@ -126,6 +136,11 @@ class EstimatorToe(EstimatorBase):
         time_stamps = rtime
         min_peak_dist = self._fs * (1.0 / self._highcut) * 2 
         pkwidth = self._fs * (0.1 / self._highcut) if self._fs * (0.1 / self._highcut) > 1.0 else 1.0
+
+        if min_peak_dist < 1.0:
+            # signal.find_peaks requires a minimum distance of 1.0
+            rospy.logerr("min_peak_dist is < 1, return estimator_toe method")
+            return
 
         peak_indexes_l1, _ = signal.find_peaks(ltoe_rms,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
         valley_indexes_l1, _ = signal.find_peaks(-ltoe_rms,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
@@ -188,25 +203,35 @@ class EstimatorToe(EstimatorBase):
         ret_dict = {}
         ret_dict['/gait/toe_params'] = params
         ret_dict['/gait/toe_band'] = debugs
-        pipe.put(ret_dict)
+
+        try:
+            pipe.put(ret_dict, block = True, timeout = 0.1)
+        except Queue.Full:
+            rospy.logwarn("Pipe is full, unable to send data.")
 
     def step_length(self, time_stamps, leg1, leg2):
 
         min_peak_dist = self._fs * (1.0 / self._highcut) * 2
 
+        if min_peak_dist < 1.0:
+            # signal.find_peaks requires a minimum distance of 1.0
+            rospy.logerr("min_peak_dist is < 1, return estimator_toe method")
+            return 0.0, 0.0
+
         #since we're using RMS (absolute distance) peak = TO (maximum distance), valley = HS (minimum distance)
         min_peak_dist = self._fs * (1.0 / self._highcut) * 2
         pkwidth = self._fs * (0.1 / self._highcut) if self._fs * (0.1 / self._highcut) > 1.0 else 1.0
-        peak_indexes_l1, _ = signal.find_peaks(leg1,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
+        # peak_indexes_l1, _ = signal.find_peaks(leg1,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
         valley_indexes_l1, _ = signal.find_peaks(-leg1,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
-        peak_indexes_l2, _ = signal.find_peaks(leg2,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
+        # peak_indexes_l2, _ = signal.find_peaks(leg2,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
         valley_indexes_l2, _ = signal.find_peaks(-leg2,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
 
-        to_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
-        hs_l1_t = np.array([time_stamps[p] for v in valley_indexes_l1])
+        #TODO: (Andreas) unused
+        # to_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
+        # hs_l1_t = np.array([time_stamps[v] for v in valley_indexes_l1])
 
-        to_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
-        hs_l2_t = np.array([time_stamps[p] for v in valley_indexes_l2])
+        # to_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
+        # hs_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
 
         xc,yc = prep.interpolated_intercept(np.array(time_stamps), leg1, leg2)
         

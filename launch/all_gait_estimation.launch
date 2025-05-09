@@ -1,41 +1,66 @@
 <launch>
     
-    <arg name="from_bags" default="false"/>
+    <arg name="standalone" default="false"/>
+    <arg name="toe_detection" default="true"/>
+    <arg name="leg_detection" default="true"/>
+    <arg name="shoulder_detection" default="false"/>
+    <arg name="force_detection" default="false"/>
 
-    <include if="$(arg from_bags)" file="$(find gait_parameters_estimation)/launch/publish_urdf.launch"/>
+    <!-- ROBOT URDF -->
+    <include if="$(arg standalone)" file="$(find za_experimental)/launch/urdf_standalone.launch" />
+
+    <!-- Transforms for standalone launch -->
+    <!-- <node name="robot_lower_legs_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="-0.031 -0.000 0.731 -0.423 -0.000 0.906 -0.000 base_link lower_legs_camera_link" />
+    <node name="lower_legs_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 -0.02 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_depth_frame" />
+    <node name="lower_legs_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 lower_legs_camera_depth_frame lower_legs_camera_depth_optical_frame" />
+    <node name="lower_legs_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_rgb_optical_frame " /> -->
+    
+    <!-- Transforms for standalone launch -->
+    <!-- <node name="robot_upper_body_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="0.197 -0.000 1.163 0.065 0.000 0.998 -0.000 base_link upper_body_camera_link" />
+    <node name="upper_body_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 -0.02 0 0 0 0 1 upper_body_camera_link upper_body_camera_depth_frame" />
+    <node name="upper_body_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 upper_body_camera_depth_frame upper_body_camera_depth_optical_frame" />
+    <node name="upper_body_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 upper_body_camera_link upper_body_camera_rgb_optical_frame " /> -->
+    
 
     <!-- TOE DETECTION WITH LOWER DEPTH CAMERA -->
-        <include file="$(find gait_parameters_estimation)/launch/cameras.launch">
-            <arg name="launch_lower_legs_camera" value="true"/>
+    <group if="$(arg toe_detection)">
+        <include file="$(find gait_parameters_estimation)/launch/camera.launch">
+            <arg name="camera_name" value="lower_legs_camera"/>
         </include>
         <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" />
         <!-- <include file="$(find gait_parameters_estimation)/launch/feet_detection.launch" /> -->
+    </group>
 
     <!-- LEG DETECTION WITH LASERSCANNER -->
+    <group if="$(arg leg_detection)">
+        <!-- Laserscanners will autostart from robotrainer_bringup/robot/sr3_on_startup.launch -->
         <include file="$(find gait_parameters_estimation)/launch/leg_tracker_one_person.launch" />
+    </group>
 
     <!-- SHOULDER DETECTION WITH UPPER DEPTH CAMERA AND OPENPOSE -->
-        <!-- <include file="$(human_body_detection)/launch/human_body_detection_asus.launch" /> -->
+    <group if="$(arg shoulder_detection)">
+        <include file="$(human_body_detection)/launch/human_body_detection_asus.launch" />
 
-        <!-- Transforms for standalone launch -->
-        <!-- <node name="robot_fts_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 -0.866 0.500 fts_base_link fts_reference_link" /> -->
-        
-        <!-- <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
+        <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
             <rosparam command="load" file="$(find gait_parameters_estimation)/include/KalmanFilterParameters.yaml"/>
             <remap from="/base/sensor_data" to="base/output_data"/>
             <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
-        </node> -->
+        </node>
+    </group>
 
     <!-- FORCE DETECTION WITH FTS SENSOR -->
+    <group if="$(arg force_detection)">
+        <!-- fts will autostart from robotrainer_bringup/robot/sr3_on_startup.launch -->
+    </group>
 
     <!-- GAIT ESTIMATION -->
-        <include file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" />
-        <!-- <include file="$(find gait_parameters_estimation)/launch/gait_estimation.launch" /> -->
-    
-        <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
-            <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
-            <remap from="/base/sensor_data" to="base/output_data"/>
-            <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
-        </node>
+    <include file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" />
+    <!-- <include file="$(find gait_parameters_estimation)/launch/gait_estimation.launch" /> -->
+
+    <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
+        <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+        <remap from="/base/sensor_data" to="base/output_data"/>
+        <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
+    </node>
 
 </launch>

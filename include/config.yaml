@@ -2,24 +2,24 @@
 window_size: 7.0
 window_step: 1.0
 vel_fs: 50.0
-pose_fs: 100.0
+pose_fs: 500.0
 # params for each sensor
 force:
-  fs: 80.0
+  fs: 200.0
   lowcut: 0.7
   highcut: 2.0
   amp_update: 8.0e-2
   freq_update: 2.0e-3
   var: 0.0790
 legs:
-  fs: 5.0
+  fs: 17.0
   lowcut: 0.7
   highcut: 2.0
   amp_update: 4.0e-1
   freq_update: 2.0e-0
   var: 0.0065
 toe:
-  fs: 5.0
+  fs: 1
   lowcut: 0.7
   highcut: 2.0
   amp_update: 6.0e-1

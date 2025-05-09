@@ -2,7 +2,8 @@
 <launch>    
     <node pkg="camera_lower_leg_tracking" name="feet_detection" type="feet_detection_node" output="screen">
         <param name="input_pointcloud_topic" value="/lower_legs_camera/depth_registered/points" />
-        <param name="camera_depth_frame_id" value="lower_legs_camera_depth_optical_frame" />
+        <!-- depth_registered will be matched to the rgb image on the rgb_frame -->
+        <param name="camera_depth_frame_id" value="lower_legs_camera_rgb_optical_frame" />
         <param name="ground_level" value="0.005" />
         <param name="point_size_post_init" value="0.01" />
         <param name="point_size_pre_init" value="0.001" />

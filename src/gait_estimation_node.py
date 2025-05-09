@@ -40,7 +40,7 @@ pub_dicts['/gait/toe_band'] = toe_band
 pub_dicts['/gait/shoulder_params'] = shoulder_pub
 pub_dicts['/gait/shoulder_band'] = shoulder_band
 
-#fuse parameter estimations from each sensor using wls
+#fuse parameter estimations from each sensor using wls (weighted least squares)
 def WLS(results):
     ws = []
     b = []
@@ -62,6 +62,11 @@ def WLS(results):
     wls_param = gp()
     avg_param = gp()
     total_weight = 0
+
+    if len(results) == 0:
+        rospy.logwarn("No results available for WLS fusion")
+        return
+
     for k in results.keys():
         res = results[k]
         w = rospy.get_param('/gait_estimation/'+k+'/var')
@@ -106,6 +111,7 @@ def WLS(results):
             if res.leg2.stance_time >= 0.0:
                 l2_stance.append(res.leg2.stance_time * weight)
 
+            # double support time currently not used
             if res.dst > 0.0:
                 dst.append(res.dst)
 
@@ -163,12 +169,13 @@ def collect_data(event):
 
     t1 = rospy.Time.now()
     processes = []
+    processes_names = []
     pipes = []
     for k in estimators.keys():
         est = estimators[k]
         win = est.get_window()
         if win is None:
-            rospy.loginfo("Win is None")
+            rospy.loginfo("Win is None for %s", k)
         if win is not None:
             #start gait estimation process for each sensor if data available
             queue = MQ()
@@ -176,9 +183,10 @@ def collect_data(event):
             rospy.loginfo("Added %s Process", k)
             pipes.append(queue)
             processes.append(proc)
+            processes_names.append(k)
     for p in processes:
         p.start()
-        rospy.loginfo("Started Process")
+        rospy.loginfo("Started %s Process", processes_names[processes.index(p)])
     start = rospy.Time.now()
     stamp = rospy.Time.now()
     Results = {}
@@ -213,7 +221,7 @@ def collect_data(event):
                                 pub_dicts[k].publish(point)
                     processes[i].join()
                 except Queue.Empty:
-                    rospy.loginfo("Data on pipe not ready yet")           
+                    rospy.loginfo("Data on pipe %s, not ready yet", processes_names[i])   
             if any(p.is_alive() for p in processes):
                 rospy.loginfo("Process sleep")
                 rospy.sleep(0.01)
@@ -222,11 +230,17 @@ def collect_data(event):
     else:
         rospy.loginfo("!! Process join timeout")
         for p in processes:
-            p.terminate()
-            p.join()
+            if p.is_alive():
+                rospy.loginfo("Terminating process %s", processes_names[processes.index(p)])
+                p.terminate()  # Forcefully terminate the process
+            p.join(timeout=0.1)  # Wait for the process to exit with a timeout
+            if p.is_alive():
+                rospy.logwarn("Process %s did not terminate properly", processes_names[processes.index(p)])
+            else:
+                rospy.loginfo("Process %s terminated successfully", processes_names[processes.index(p)])
     if processes:
-        rospy.loginfo("Main loop execute time %.8f ", (rospy.Time.now() - t1).to_sec())
         WLS(Results)
+        rospy.loginfo("Main loop execute time %.8f ", (rospy.Time.now() - t1).to_sec())
         
 
 
@@ -249,10 +263,10 @@ if __name__ == '__main__':
     est_toe = EstimatorToe()
     est_sh = EstimatorShoulder()
     #dictionary holding estimator for each source
-    estimators['force'] = est_force
+    # estimators['force'] = est_force
     estimators['legs'] = est_leg
-    estimators['toe'] = est_toe
-    estimators['shoulder'] = est_sh
+    # estimators['toe'] = est_toe
+    # estimators['shoulder'] = est_sh
 
     
 

@@ -93,7 +93,7 @@ void body_points_cb(geometry_msgs::PolygonStamped body_points) {
   tf2_ros::TransformListener tfListener(tfBuffer);
 
   try {
-      transformStamped = tfBuffer.lookupTransform("base_link", "camera_body_rgb_optical_frame", ros::Time(0), ros::Duration(2));
+      transformStamped = tfBuffer.lookupTransform("base_link", "upper_body_camera_rgb_optical_frame", ros::Time(0), ros::Duration(2));
   } catch (tf2::TransformException &ex) {
       ROS_WARN("No Transformation for Camera found %s", ex.what());
   }

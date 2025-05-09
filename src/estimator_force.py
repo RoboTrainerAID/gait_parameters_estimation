@@ -15,7 +15,7 @@ class EstimatorForce(EstimatorBase):
         self._tflistener = tf2_ros.TransformListener(self._tfBuffer)
         self._flock = Lock()
 
-        self._sub_force = self._sub_force = rospy.Subscriber("/base/sensor_data",WrenchStamped, self.listen_sensor)
+        self._sub_force = self._sub_force = rospy.Subscriber("/base/output_data",WrenchStamped, self.listen_sensor)
         self._force_pub = rospy.Publisher('/gait/force_params', gp, tcp_nodelay=True, queue_size=1024)
         self._force_band = rospy.Publisher('/gait/force_band', PointStamped, tcp_nodelay=True, queue_size=1024)
 

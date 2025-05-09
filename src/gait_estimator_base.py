@@ -10,7 +10,7 @@ import scipy.signal as signal
 import rospy
 from wflc import WFLC
 import Queue
-from geometry_msgs.msg import WrenchStamped, Twist, PointStamped, PolygonStamped, Vector3
+from geometry_msgs.msg import WrenchStamped, TwistStamped, PointStamped, PolygonStamped, Vector3
 from ipr_helpers.msg import Pose2DStamped
 from multiprocessing import Process, Pipe
 from multiprocessing import Queue as MQ
@@ -42,11 +42,12 @@ class EstimatorBase(object):
         self._last_vel_time = rospy.Time.now()
         self._data_window = Queue.Queue()
 
-        self._sub_pose = rospy.Subscriber("/robotrainer/mobile_robot_pose",Pose2DStamped, self.listen_pose)
-        self._sub_speed = rospy.Subscriber("/base/fts_controller/fts_command",Twist, self.listen_speed)
-        self._sub_veloc_remap = rospy.Subscriber("/base/robotrainer_controllers/base/velocity_output", Vector3, self.remap_velocity)
+        self._sub_pose = rospy.Subscriber("/mobile_robot_pose",Pose2DStamped, self.listen_pose)
+        # self._sub_speed = rospy.Subscriber("/base/fts_controller/fts_command",Twist, self.listen_speed)
+        # self._sub_veloc_remap = rospy.Subscriber("/base/robotrainer_controllers/base/velocity_output", Vector3, self.remap_velocity)
+        self._sub_speed = rospy.Subscriber("/base/fts_adaptive_force_controller/debug/velocity_output",TwistStamped, self.listen_speed)
 
-        self._remap_vel_pub = rospy.Publisher("/base/fts_controller/fts_command",Twist, tcp_nodelay=True, queue_size=1024)
+        # self._remap_vel_pub = rospy.Publisher("/base/fts_controller/fts_command",Twist, tcp_nodelay=True, queue_size=1024)
 
         
     #record robot pose and movement
@@ -65,13 +66,13 @@ class EstimatorBase(object):
             fs = 1.0 / delta_t
             self._vel_fs = 0.05 * fs + 0.95 * self._vel_fs
 
-        self._vel_data.append(data)
+        self._vel_data.append(data.twist)
         self._last_vel_time = t_now
 
     #estimate sampling frequency for one window
     def est_fs(self, window):
         sd_time_stamps = [i.header.stamp for i in window]
-        t = np.array(map(lambda s:s.to_sec() ,sd_time_stamps))
+        # t = np.array(map(lambda s:s.to_sec() ,sd_time_stamps))
         t_dif = [(sd_time_stamps[i+1] - sd_time_stamps[i]).to_sec() for i in range(len(sd_time_stamps)-1)]
 
         if len(t_dif) == 0:
@@ -108,14 +109,14 @@ class EstimatorBase(object):
         return self._window_vel
 
     #remap velocity data to twist for new controller
-    def remap_velocity(self, data):
+    # def remap_velocity(self, data):
         
-        remapped_vel = Twist()
-        remapped_vel.linear.x = data.x
-        remapped_vel.linear.y = data.y
-        remapped_vel.angular.z = data.z
+    #     remapped_vel = Twist()
+    #     remapped_vel.linear.x = data.x
+    #     remapped_vel.linear.y = data.y
+    #     remapped_vel.angular.z = data.z
         
-        self._remap_vel_pub.publish(remapped_vel)
+    #     self._remap_vel_pub.publish(remapped_vel)
 
     def set_pose_win(self):
         win_step = int(self._pose_fs * self._window_step)

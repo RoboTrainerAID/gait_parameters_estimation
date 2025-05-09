@@ -4,14 +4,14 @@ from __future__ import division
 import rospy
 import numpy as np
 from leg_tracker.msg import PersonMsg, LegMsg
-from geometry_msgs.msg import WrenchStamped, Twist,PointStamped, PolygonStamped, Point32
+from geometry_msgs.msg import WrenchStamped, TwistStamped, PointStamped, PolygonStamped, Point32
 import tf2_ros
 import tf2_geometry_msgs
 
 pub = rospy.Publisher('/leg_detection/people_msg_stamped', PersonMsg,tcp_nodelay=True, queue_size=1024)
-pub_f = rospy.Publisher('/base/sensor_data', WrenchStamped,tcp_nodelay=True, queue_size=1024)
+pub_f = rospy.Publisher('/base/output_data', WrenchStamped,tcp_nodelay=True, queue_size=1024)
 pub_tf = rospy.Publisher('/base/transformed_data', WrenchStamped,tcp_nodelay=True, queue_size=1024)
-pub_v = rospy.Publisher("/base/fts_controller/fts_command",Twist, tcp_nodelay=True, queue_size=1024)
+pub_v = rospy.Publisher("/base/fts_adaptive_force_controller/debug/velocity_output",TwistStamped, tcp_nodelay=True, queue_size=1024)
 pub_tr = rospy.Publisher("/right_toe",PointStamped, tcp_nodelay=True, queue_size=1024)
 pub_tl = rospy.Publisher("/left_toe",PointStamped, tcp_nodelay=True, queue_size=1024)
 pub_sh = rospy.Publisher("/human_body_detection/points",PolygonStamped, tcp_nodelay=True, queue_size=1024)
@@ -36,16 +36,17 @@ def pub_vel(event):
             freq_y = 1.1 / 2.0
         if mode == 2:
             freq_y = 0.6 / 2.0
-        print "switch mode to " + str(mode)
+        print("switch mode to " + str(mode))
         last_shift = t_now
-    msg = Twist()
+    msg = TwistStamped()
+    msg.header.stamp = rospy.Time.now()
     if mode == 0:
-        msg.linear.x = 1.0
+        msg.twist.linear.x = 1.0
     elif mode == 1:
-        msg.linear.y = 1.0
+        msg.twist.linear.y = 1.0
     elif mode == 2:
-        msg.linear.x = 1.0
-        msg.angular.z = 2.0
+        msg.twist.linear.x = 1.0
+        msg.twist.angular.z = 2.0
     pub_v.publish(msg)
 
 def pub_msg(event):
@@ -123,12 +124,12 @@ def transform_sensor(data):
 
 def pub_should(event):
         #Index Left shoulder is 5, Right is 2
-        # frame: 'camera_body_rgb_optical_frame'
+        # frame: 'upper_body_camera_rgb_optical_frame'
         global mode
         t = rospy.Time.now()
         poly = PolygonStamped()
         poly.header.stamp = t
-        poly.header.frame_id = 'camera_body_rgb_optical_frame'
+        poly.header.frame_id = 'upper_body_camera_rgb_optical_frame'
         poly.polygon.points = [Point32(float('nan'),0.0,0.0) for _ in range(20)] 
 
 
@@ -158,7 +159,7 @@ def pub_should(event):
 
         tf = None
         try:
-            tf = tfBuffer.lookup_transform('camera_body_rgb_optical_frame','base_link', rospy.Time().now(), timeout = rospy.Duration(1.0))
+            tf = tfBuffer.lookup_transform('upper_body_camera_rgb_optical_frame','base_link', rospy.Time().now(), timeout = rospy.Duration(1.0))
         except Exception:
             rospy.loginfo("No transform for shoulder")
         if tf:

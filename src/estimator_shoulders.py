@@ -30,7 +30,7 @@ class EstimatorShoulder(EstimatorBase):
         #messed up stamps again?
         time = rospy.Time.now()
         try:
-            tf = self._tfBuffer.lookup_transform('base_link','camera_body_rgb_optical_frame', rospy.Time().now(), timeout = rospy.Duration(1.0))
+            tf = self._tfBuffer.lookup_transform('base_link','upper_body_camera_rgb_optical_frame', rospy.Time().now(), timeout = rospy.Duration(1.0))
             l_shoulder, r_shoulder = self.to_PointStamped(data)
             l_shoulder_tf = tf2_geometry_msgs.do_transform_point(l_shoulder, tf)
             r_shoulder_tf = tf2_geometry_msgs.do_transform_point(r_shoulder, tf)
@@ -51,7 +51,7 @@ class EstimatorShoulder(EstimatorBase):
                 if fs > 0.0:
                     self._fs = (0.1 * fs + 0.9 * self._fs)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print "TF TEST: Transformation Data from 'camera_body_rgb_optical_frame' to 'base_link' not found"
+            print "TF TEST: Transformation Data from 'upper_body_camera_rgb_optical_frame' to 'base_link' not found"
             return None
 
     def get_window(self):

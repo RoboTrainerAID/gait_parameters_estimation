@@ -2,7 +2,7 @@
 
 from __future__ import division
 import rospy
-from geometry_msgs.msg import WrenchStamped, Twist, PointStamped, PolygonStamped, Vector3
+from geometry_msgs.msg import WrenchStamped, Twist, TwistStamped, PointStamped, PolygonStamped, Vector3
 from std_msgs.msg import Float64MultiArray
 from std_msgs.msg import Float64
 from threading import Lock
@@ -117,7 +117,7 @@ class GaitEstimation():
         self._mean_fus = rospy.Publisher('/gait/mean_fus',gp, tcp_nodelay=True, queue_size=1024)
         self._lsq_fus = rospy.Publisher('/gait/lsq_fus',gp, tcp_nodelay=True, queue_size=1024)
         
-        self._remap_vel_pub = rospy.Publisher("/base/fts_controller/fts_command",Twist, tcp_nodelay=True, queue_size=1024)
+        # self._remap_vel_pub = rospy.Publisher("/base/fts_controller/fts_command",Twist, tcp_nodelay=True, queue_size=1024)
         
         self.init_pub_dict()
         self.register_subs()
@@ -134,14 +134,15 @@ class GaitEstimation():
         
     
     def register_subs(self):
-        self._sub_force = rospy.Subscriber("/base/sensor_data",WrenchStamped, self.listen_sensor)
+        self._sub_force = rospy.Subscriber("/base/output_data",WrenchStamped, self.listen_sensor)
         self._sub_leg = rospy.Subscriber("/leg_detection/people_msg_stamped",PersonMsg, self.listen_leg_tracker)
-        self._sub_speed = rospy.Subscriber("/base/fts_controller/fts_command",Twist, self.listen_speed)
+        self._sub_speed = rospy.Subscriber("/base/fts_adaptive_force_controller/debug/velocity_output",TwistStamped, self.listen_speed)
+        # self._sub_speed = rospy.Subscriber("/base/fts_controller/fts_command",Twist, self.listen_speed)
         #self._sub_rtoe = rospy.Subscriber("/right_toe",PointStamped, self.listen_right_toe)
         #self._sub_ltoe = rospy.Subscriber("/left_toe",PointStamped, self.listen_left_toe)
         self._sub_pose = rospy.Subscriber("/robotrainer/mobile_robot_pose",Pose2DStamped, self.listen_pose)
         self._sub_shoulders = rospy.Subscriber("/human_body_detection/points",PolygonStamped, self.list_shoulders)
-        self._sub_veloc_remap = rospy.Subscriber("/base/robotrainer_controllers/base/velocity_output", Vector3, self.remap_velocity)
+        # self._sub_veloc_remap = rospy.Subscriber("/base/robotrainer_controllers/base/velocity_output", Vector3, self.remap_velocity)
 
         self._sub_rtoe_sync = Subscriber("/right_toe",PointStamped)
         self._sub_ltoe_sync = Subscriber("/left_toe",PointStamped)
@@ -165,14 +166,14 @@ class GaitEstimation():
 
     
     #remap velocity Messages from new subscriber (Vector3) to old type (Twist)
-    def remap_velocity(self, data):
+    # def remap_velocity(self, data):
         
-        remapped_vel = Twist()
-        remapped_vel.linear.x = data.x
-        remapped_vel.linear.y = data.y
-        remapped_vel.angular.z = data.z
+    #     remapped_vel = Twist()
+    #     remapped_vel.linear.x = data.x
+    #     remapped_vel.linear.y = data.y
+    #     remapped_vel.angular.z = data.z
         
-        self._remap_vel_pub.publish(remapped_vel)
+    #     self._remap_vel_pub.publish(remapped_vel)
         
         
     def listen_sensor(self, data):      
@@ -218,7 +219,7 @@ class GaitEstimation():
         
     def list_shoulders(self,data):
         try:
-            tf = self._tfBuffer.lookup_transform('base_link','camera_body_rgb_optical_frame', rospy.Time().now(), timeout = rospy.Duration(1.0))
+            tf = self._tfBuffer.lookup_transform('base_link','upper_body_camera_rgb_optical_frame', rospy.Time().now(), timeout = rospy.Duration(1.0))
             l_shoulder, r_shoulder = self.to_PointStamped(data)
             l_shoulder_tf = tf2_geometry_msgs.do_transform_point(l_shoulder, tf)
             r_shoulder_tf = tf2_geometry_msgs.do_transform_point(r_shoulder, tf)
@@ -242,7 +243,7 @@ class GaitEstimation():
                 if fs > 0.0:
                     self._shoulder_fs = (0.1 * fs + 0.9 * self._shoulder_fs)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print "TF TEST: Transformation Data from 'camera_body_rgb_optical_frame' to 'base_link' not found"
+            print "TF TEST: Transformation Data from 'upper_body_camera_rgb_optical_frame' to 'base_link' not found"
             return None
 
     def to_PointStamped(self,data):
@@ -261,7 +262,7 @@ class GaitEstimation():
         delta_t = (t_now - self._last_vel_time).to_sec()
         fs = 1.0 / delta_t
 
-        self._speed_data.append(data)
+        self._speed_data.append(data.twist)
         self._speed_fs = 0.05 * fs + 0.95 * self._speed_fs
         self._last_vel_time = t_now
 

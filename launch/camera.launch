@@ -3,8 +3,9 @@
     <arg name="camera_name" default="lower_legs_camera"/>
     <!-- <arg name="camera_name" default="upper_body_camera"/> -->
 
+    <!-- Use device on USB bus 1, address 0: 1@0 Use first device found: #1 Use device with given serial number: B00367707227042B-->
     <arg if="$(eval camera_name == 'lower_legs_camera')" name="device_id" value="1@0"/>
-    <arg if="$(eval camera_name == 'upper_body_camera')" name="device_id" value="3@0"/>
+    <arg if="$(eval camera_name == 'upper_body_camera')" name="device_id" value="3@0"/><!-- 3@0 -->
 
     <include file="$(find openni2_launch)/launch/openni2.launch" >
         <!-- Launch arguments https://wiki.ros.org/openni_launch -->
@@ -15,8 +16,10 @@
         <arg name="num_worker_threads" default="4"/>
 		<arg name="rgb_frame_id" value="$(arg camera_name)_rgb_optical_frame"/>
 		<arg name="depth_frame_id" value="$(arg camera_name)_depth_optical_frame"/>
-		<arg name="publish_tf" value="true"/>
+        <!-- tfs are already published in robotrainer2.urdf.xacro -->
+		<arg name="publish_tf" value="false"/>
         <arg name="depth_registration" value="true"/>
+		<arg name="rgb_camera_info_url" value="file:///$(find cob_calibration_data)/robotrainer2/calibration/cameras/$(arg camera_name).yaml"/>
 
         <!-- Launch arguments from rgbd_launch https://wiki.ros.org/rgbd_launch -->
         <arg name="rgb_processing" value="true"/> 

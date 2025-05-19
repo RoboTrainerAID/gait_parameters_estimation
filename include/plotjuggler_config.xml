@@ -1,43 +1,43 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <root>
  <tabbed_widget parent="main_window" name="Main Window">
-  <Tab containers="1" tab_name="x">
+  <Tab tab_name="right" containers="1">
    <Container>
-    <DockSplitter count="1" orientation="-" sizes="1">
+    <DockSplitter orientation="-" sizes="1" count="1">
      <DockArea name="...">
-      <plot style="Lines" mode="TimeSeries" flip_y="false" flip_x="false">
-       <range right="36.000464" left="0.000000" top="1.135906" bottom="-1.253567"/>
+      <plot flip_x="false" flip_y="false" style="Lines" mode="TimeSeries">
+       <range left="-0.192175" top="-0.160937" bottom="-1.195043" right="31.510833"/>
        <limitY/>
-       <curve color="#1f77b4" name="/base/fts_adaptive_force_controller/debug/velocity_output/twist/linear/x"/>
-       <curve color="#1ac938" name="/base/output_data/wrench/force/x"/>
-       <curve color="#9467bd" name="/leg_detection/people_msg_stamped/leg1/position/x"/>
-       <curve color="#17becf" name="/leg_detection/people_msg_stamped/leg2/position/x"/>
-       <curve color="#1f77b4" name="/mobile_robot_pose/pose/x"/>
+       <curve color="#1f77b4" name="/leg_detection/people_msg_stamped/leg1/position/x"/>
+       <curve color="#d62728" name="/toe_detection/right_toe/point/x"/>
        <curve color="#1ac938" name="/gait/leg_params/leg1/step_length"/>
-       <curve color="#ff7f0e" name="/gait/leg_params/leg1/cadence"/>
-       <curve color="#f14cc1" name="/gait/leg_params/leg1/stance_time"/>
-       <curve color="#9467bd" name="/gait/leg_params/leg1/stride_intervall"/>
-       <curve color="#17becf" name="/gait/leg_params/leg1/swing_time"/>
-       <curve color="#bcbd22" name="/gait/leg_params/leg1/stride_length"/>
-       <curve color="#1f77b4" name="/gait/leg_params/leg2/cadence"/>
-       <curve color="#d62728" name="/gait/leg_params/leg2/step_length"/>
+       <curve color="#ff7f0e" name="/gait/leg_params/leg1/stride_length"/>
+       <curve color="#f14cc1" name="/gait/toe_params/leg1/step_length"/>
+       <curve color="#9467bd" name="/gait/toe_params/leg1/stride_length"/>
+       <curve color="#17becf" name="/gait/AVG_params/leg1/step_length"/>
+       <curve color="#bcbd22" name="/gait/AVG_params/leg1/stride_length"/>
+       <curve color="#1f77b4" name="/gait/leg_params/cadence"/>
+       <curve color="#1ac938" name="/gait/toe_params/cadence"/>
       </plot>
      </DockArea>
     </DockSplitter>
    </Container>
   </Tab>
-  <Tab containers="1" tab_name="y">
+  <Tab tab_name="left" containers="1">
    <Container>
-    <DockSplitter count="1" orientation="-" sizes="1">
+    <DockSplitter orientation="-" sizes="1" count="1">
      <DockArea name="...">
-      <plot style="Lines" mode="TimeSeries" flip_y="false" flip_x="false">
-       <range right="36.000464" left="0.000000" top="0.315162" bottom="-0.677719"/>
+      <plot flip_x="false" flip_y="false" style="Lines" mode="TimeSeries">
+       <range left="-0.192175" top="-0.073592" bottom="-1.285201" right="31.510833"/>
        <limitY/>
-       <curve color="#d62728" name="/base/fts_adaptive_force_controller/debug/velocity_output/twist/linear/y"/>
-       <curve color="#ff7f0e" name="/base/output_data/wrench/force/y"/>
-       <curve color="#f14cc1" name="/leg_detection/people_msg_stamped/leg1/position/y"/>
-       <curve color="#bcbd22" name="/leg_detection/people_msg_stamped/leg2/position/y"/>
-       <curve color="#d62728" name="/mobile_robot_pose/pose/y"/>
+       <curve color="#f14cc1" name="/gait/leg_params/leg2/cadence"/>
+       <curve color="#9467bd" name="/gait/leg_params/leg2/step_length"/>
+       <curve color="#17becf" name="/gait/leg_params/leg2/stride_length"/>
+       <curve color="#bcbd22" name="/gait/toe_params/leg2/cadence"/>
+       <curve color="#1f77b4" name="/gait/toe_params/leg2/step_length"/>
+       <curve color="#d62728" name="/gait/toe_params/leg2/stride_length"/>
+       <curve color="#1ac938" name="/leg_detection/people_msg_stamped/leg2/position/x"/>
+       <curve color="#ff7f0e" name="/toe_detection/left_toe/point/x"/>
       </plot>
      </DockArea>
     </DockSplitter>
@@ -82,20 +82,9 @@
   <plugin ID="ROS Topic Re-Publisher"/>
  </Plugins>
  <!-- - - - - - - - - - - - - - - -->
- <previouslyLoaded_Datafiles>
-  <fileInfo filename="../../bags/2025-04-25-17-17-05.bag" prefix="">
-   <selected_datasources value="/base_laser_back/scan;/base/fts_adaptive_force_controller/debug/velocity_output;/base/output_data;/gait/AVG_params;/gait/force_band;/gait/force_params;/gait/leg_band;/gait/leg_params;/leg_detection/people_msg_stamped;/lower_legs_camera/depth_registered/points;/mobile_robot_pose"/>
-   <plugin ID="DataLoad ROS bags">
-    <use_header_stamp value="false"/>
-    <discard_large_arrays value="true"/>
-    <max_array_size value="100"/>
-    <boolean_strings_to_number value="true"/>
-    <remove_suffix_from_strings value="true"/>
-   </plugin>
-  </fileInfo>
- </previouslyLoaded_Datafiles>
  <!-- - - - - - - - - - - - - - - -->
  <customMathEquations/>
  <snippets/>
  <!-- - - - - - - - - - - - - - - -->
 </root>
+

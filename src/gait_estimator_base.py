@@ -42,12 +42,8 @@ class EstimatorBase(object):
         self._last_vel_time = rospy.Time.now()
         self._data_window = Queue.Queue()
 
-        self._sub_pose = rospy.Subscriber("/mobile_robot_pose",Pose2DStamped, self.listen_pose)
-        # self._sub_speed = rospy.Subscriber("/base/fts_controller/fts_command",Twist, self.listen_speed)
-        # self._sub_veloc_remap = rospy.Subscriber("/base/robotrainer_controllers/base/velocity_output", Vector3, self.remap_velocity)
+        self._sub_pose = rospy.Subscriber("/robotrainer/mobile_robot_pose",Pose2DStamped, self.listen_pose)
         self._sub_speed = rospy.Subscriber("/base/fts_adaptive_force_controller/debug/velocity_output",TwistStamped, self.listen_speed)
-
-        # self._remap_vel_pub = rospy.Publisher("/base/fts_controller/fts_command",Twist, tcp_nodelay=True, queue_size=1024)
 
         
     #record robot pose and movement
@@ -107,16 +103,6 @@ class EstimatorBase(object):
         P.point.z = z_avg
 
         return self._window_vel
-
-    #remap velocity data to twist for new controller
-    # def remap_velocity(self, data):
-        
-    #     remapped_vel = Twist()
-    #     remapped_vel.linear.x = data.x
-    #     remapped_vel.linear.y = data.y
-    #     remapped_vel.angular.z = data.z
-        
-    #     self._remap_vel_pub.publish(remapped_vel)
 
     def set_pose_win(self):
         win_step = int(self._pose_fs * self._window_step)

@@ -15,8 +15,8 @@ class EstimatorToe(EstimatorBase):
         self._left_toe = []
 
         self._tlock = Lock()
-        self._sub_rtoe_sync = Subscriber("/right_toe",PointStamped)
-        self._sub_ltoe_sync = Subscriber("/left_toe",PointStamped)
+        self._sub_rtoe_sync = Subscriber("/toe_detection/right_toe",PointStamped)
+        self._sub_ltoe_sync = Subscriber("/toe_detection/left_toe",PointStamped)
         self._ats = ApproximateTimeSynchronizer([self._sub_rtoe_sync, self._sub_ltoe_sync], queue_size=5, slop=0.2)
         self._ats.registerCallback(self.toe_sync)
 

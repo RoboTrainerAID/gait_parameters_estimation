@@ -1,30 +1,32 @@
 <launch>
     
-    <arg name="standalone" default="false"/>
-    <arg name="toe_detection" default="true"/>
-    <arg name="leg_detection" default="true"/>
-    <arg name="shoulder_detection" default="false"/>
-    <arg name="force_detection" default="false"/>
+    <arg name="from_bag" default="true"/>
+    <arg name="use_toe" default="true"/>
+    <arg name="use_leg" default="true"/>
+    <arg name="use_shoulder" default="false"/>
+    <arg name="use_force" default="false"/>
 
     <!-- ROBOT URDF -->
-    <include if="$(arg standalone)" file="$(find za_experimental)/launch/urdf_standalone.launch" />
+    <include if="$(arg from_bag)" file="$(find za_experimental)/launch/urdf_standalone.launch" />
 
-    <!-- Transforms for standalone launch -->
+    <!-- Transforms for from_bag launch -->
     <!-- <node name="robot_lower_legs_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="-0.031 -0.000 0.731 -0.423 -0.000 0.906 -0.000 base_link lower_legs_camera_link" />
-    <node name="lower_legs_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 -0.02 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_depth_frame" />
+    <node name="lower_legs_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.02 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_depth_frame" />
     <node name="lower_legs_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 lower_legs_camera_depth_frame lower_legs_camera_depth_optical_frame" />
-    <node name="lower_legs_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_rgb_optical_frame " /> -->
+    <node name="lower_legs_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 lower_legs_camera_link lower_legs_camera_rgb_frame" />
+    <node name="lower_legs_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 lower_legs_camera_rgb_frame lower_legs_camera_rgb_optical_frame" /> -->
     
-    <!-- Transforms for standalone launch -->
+    <!-- Transforms for from_bag launch -->
     <!-- <node name="robot_upper_body_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="0.197 -0.000 1.163 0.065 0.000 0.998 -0.000 base_link upper_body_camera_link" />
-    <node name="upper_body_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 -0.02 0 0 0 0 1 upper_body_camera_link upper_body_camera_depth_frame" />
+    <node name="upper_body_camera_optical_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.02 0 0 0 0 1 upper_body_camera_link upper_body_camera_depth_frame" />
     <node name="upper_body_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 upper_body_camera_depth_frame upper_body_camera_depth_optical_frame" />
-    <node name="upper_body_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 upper_body_camera_link upper_body_camera_rgb_optical_frame " /> -->
+    <node name="upper_body_camera_rgb_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0.045 0 0 0 0 1 upper_body_camera_link upper_body_camera_rgb_frame " />
+    <node name="upper_body_camera_depth_optical_frame_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 -0.5 0.5 -0.5 0.5 upper_body_camera_rgb_frame upper_body_camera_rgb_optical_frame" /> -->
     
 
     <!-- TOE DETECTION WITH LOWER DEPTH CAMERA -->
-    <group if="$(arg toe_detection)">
-        <include file="$(find gait_parameters_estimation)/launch/camera.launch">
+    <group if="$(arg use_toe)">
+        <include unless="$(arg from_bag)" file="$(find gait_parameters_estimation)/launch/camera.launch">
             <arg name="camera_name" value="lower_legs_camera"/>
         </include>
         <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" />
@@ -32,24 +34,22 @@
     </group>
 
     <!-- LEG DETECTION WITH LASERSCANNER -->
-    <group if="$(arg leg_detection)">
+    <group if="$(arg use_leg)">
         <!-- Laserscanners will autostart from robotrainer_bringup/robot/sr3_on_startup.launch -->
         <include file="$(find gait_parameters_estimation)/launch/leg_tracker_one_person.launch" />
     </group>
 
     <!-- SHOULDER DETECTION WITH UPPER DEPTH CAMERA AND OPENPOSE -->
-    <group if="$(arg shoulder_detection)">
-        <include file="$(human_body_detection)/launch/human_body_detection_asus.launch" />
+    <group if="$(arg use_shoulder)">
+        <include unless="$(arg from_bag)" file="$(human_body_detection)/launch/human_body_detection_asus.launch" />
 
         <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
             <rosparam command="load" file="$(find gait_parameters_estimation)/include/KalmanFilterParameters.yaml"/>
-            <remap from="/base/sensor_data" to="base/output_data"/>
-            <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
         </node>
     </group>
 
     <!-- FORCE DETECTION WITH FTS SENSOR -->
-    <group if="$(arg force_detection)">
+    <group if="$(arg use_force)">
         <!-- fts will autostart from robotrainer_bringup/robot/sr3_on_startup.launch -->
     </group>
 
@@ -59,8 +59,10 @@
 
     <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
         <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
-        <remap from="/base/sensor_data" to="base/output_data"/>
-        <remap from="/robotrainer/mobile_robot_pose" to="/mobile_robot_pose"/>
+        <param name="use_toe" value="$(arg use_toe)"/>
+        <param name="use_leg" value="$(arg use_leg)"/>
+        <param name="use_shoulder" value="$(arg use_shoulder)"/>
+        <param name="use_force" value="$(arg use_force)"/>
     </node>
 
 </launch>

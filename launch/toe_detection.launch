@@ -1,9 +1,15 @@
 <?xml version="1.0"?>
 <launch>
     <node pkg="camera_lower_leg_tracking" name="toe_detection" type="toe_detection_node" output="screen">
-        <param name="ground_level" value="0.02" />
-        <param name="point_size" value="0.01" />
+        <!-- coordinates in base_link frame -->
+        <param name="min_z" value="0.02" />
+        <param name="max_z" value="0.3" />
+        <param name="min_y" value="-0.4" />
+        <param name="max_y" value="0.4" />
+        <param name="downsample_point_size" value="0.01" />
         <param name="cluster_tolerance" value="0.03" />
+        <param name="min_cluster_size" value="150" />
+        <param name="publish_debug" value="false" />
         <param name="input_pointcloud_topic" value="/lower_legs_camera/depth_registered/points" />
         <!-- depth_registered will be matched to the rgb image on the rgb_frame -->
         <param name="camera_depth_frame_id" value="lower_legs_camera_rgb_optical_frame" />

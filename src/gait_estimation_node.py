@@ -256,19 +256,27 @@ if __name__ == '__main__':
     rospy.get_rostime()
     rospy.get_time()
 
-    #initialize Estimator for each datasource
+    # Retrieve bool parameters (with default = True)
+    use_force = rospy.get_param('/gait_estimation/use_force', True)
+    use_leg = rospy.get_param('/gait_estimation/use_leg', True)
+    use_toe = rospy.get_param('/gait_estimation/use_toe', True)
+    use_shoulder = rospy.get_param('/gait_estimation/use_shoulder', True)
+
     rospy.sleep(rospy.Duration(0.25))
     est_force = EstimatorForce()
     est_leg = EstimatorLegs()
     est_toe = EstimatorToe()
     est_sh = EstimatorShoulder()
-    #dictionary holding estimator for each source
-    # estimators['force'] = est_force
-    estimators['legs'] = est_leg
-    # estimators['toe'] = est_toe
-    # estimators['shoulder'] = est_sh
 
-    
+    # Add each estimator to the dictionary only if its parameter is true
+    if use_force:
+        estimators['force'] = est_force
+    if use_leg:
+        estimators['legs'] = est_leg
+    if use_toe:
+        estimators['toe'] = est_toe
+    if use_shoulder:
+        estimators['shoulder'] = est_sh
 
     rospy.sleep(rospy.Duration(window_size))
     rospy.loginfo("Start Timed thread")

@@ -3,7 +3,7 @@
     <arg name="camera_name" default="lower_legs_camera"/>
     <!-- <arg name="camera_name" default="upper_body_camera"/> -->
 
-    <!-- Use device on USB bus 1, address 0: 1@0 Use first device found: #1 Use device with given serial number: B00367707227042B-->
+    <!-- Use device on USB bus 1, address 0 (0 means any): 1@0 Use first device found: #1 Use device with given serial number: B00367707227042B-->
     <arg if="$(eval camera_name == 'lower_legs_camera')" name="device_id" value="1@0"/>
     <arg if="$(eval camera_name == 'upper_body_camera')" name="device_id" value="3@0"/><!-- 3@0 -->
 

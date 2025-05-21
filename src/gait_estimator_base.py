@@ -42,7 +42,7 @@ class EstimatorBase(object):
         self._last_vel_time = rospy.Time.now()
         self._data_window = Queue.Queue()
 
-        self._sub_pose = rospy.Subscriber("/robotrainer/mobile_robot_pose",Pose2DStamped, self.listen_pose)
+        self._sub_pose = rospy.Subscriber("/mobile_robot_pose",Pose2DStamped, self.listen_pose)
         self._sub_speed = rospy.Subscriber("/base/fts_adaptive_force_controller/debug/velocity_output",TwistStamped, self.listen_speed)
 
         

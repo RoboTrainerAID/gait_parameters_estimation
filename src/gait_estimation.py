@@ -140,7 +140,7 @@ class GaitEstimation():
         # self._sub_speed = rospy.Subscriber("/base/fts_controller/fts_command",Twist, self.listen_speed)
         #self._sub_rtoe = rospy.Subscriber("/right_toe",PointStamped, self.listen_right_toe)
         #self._sub_ltoe = rospy.Subscriber("/left_toe",PointStamped, self.listen_left_toe)
-        self._sub_pose = rospy.Subscriber("/robotrainer/mobile_robot_pose",Pose2DStamped, self.listen_pose)
+        self._sub_pose = rospy.Subscriber("/mobile_robot_pose",Pose2DStamped, self.listen_pose)
         self._sub_shoulders = rospy.Subscriber("/human_body_detection/points",PolygonStamped, self.list_shoulders)
         # self._sub_veloc_remap = rospy.Subscriber("/base/robotrainer_controllers/base/velocity_output", Vector3, self.remap_velocity)
 

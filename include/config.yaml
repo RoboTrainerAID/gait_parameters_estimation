@@ -2,7 +2,7 @@
 window_size: 7.0
 window_step: 1.0
 vel_fs: 50.0
-pose_fs: 500.0
+pose_fs: 100.0
 # params for each sensor
 force:
   fs: 200.0

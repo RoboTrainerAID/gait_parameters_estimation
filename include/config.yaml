@@ -1,5 +1,5 @@
 # in seconds
-window_size: 7.0
+window_size: 5.0
 window_step: 1.0
 vel_fs: 50.0
 pose_fs: 100.0
@@ -12,14 +12,14 @@ force:
   freq_update: 2.0e-3
   var: 0.0790
 legs:
-  fs: 17.0
+  fs: 30.0
   lowcut: 0.7
   highcut: 2.0
   amp_update: 4.0e-1
   freq_update: 2.0e-0
   var: 0.0065
 toe:
-  fs: 1
+  fs: 30.0
   lowcut: 0.7
   highcut: 2.0
   amp_update: 6.0e-1

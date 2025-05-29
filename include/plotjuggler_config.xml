@@ -1,49 +1,49 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <root>
- <tabbed_widget parent="main_window" name="Main Window">
-  <Tab tab_name="right" containers="1">
+ <tabbed_widget name="Main Window" parent="main_window">
+  <Tab containers="1" tab_name="left">
    <Container>
-    <DockSplitter orientation="-" sizes="1" count="1">
+    <DockSplitter count="1" orientation="-" sizes="1">
      <DockArea name="...">
-      <plot flip_x="false" flip_y="false" style="Lines" mode="TimeSeries">
-       <range left="-0.192175" top="-0.160937" bottom="-1.195043" right="31.510833"/>
+      <plot mode="TimeSeries" style="Lines" flip_y="false" flip_x="false">
+       <range top="1.251361" right="17.966227" left="0.231589" bottom="-1.378380"/>
        <limitY/>
-       <curve color="#1f77b4" name="/leg_detection/people_msg_stamped/leg1/position/x"/>
-       <curve color="#d62728" name="/toe_detection/right_toe/point/x"/>
-       <curve color="#1ac938" name="/gait/leg_params/leg1/step_length"/>
-       <curve color="#ff7f0e" name="/gait/leg_params/leg1/stride_length"/>
-       <curve color="#f14cc1" name="/gait/toe_params/leg1/step_length"/>
-       <curve color="#9467bd" name="/gait/toe_params/leg1/stride_length"/>
-       <curve color="#17becf" name="/gait/AVG_params/leg1/step_length"/>
-       <curve color="#bcbd22" name="/gait/AVG_params/leg1/stride_length"/>
-       <curve color="#1f77b4" name="/gait/leg_params/cadence"/>
-       <curve color="#1ac938" name="/gait/toe_params/cadence"/>
+       <curve name="/leg_detection/people_msg_stamped/leg1/position/x" color="#1f77b4"/>
+       <curve name="/gait/leg_params/leg1/step_length" color="#1ac938"/>
+       <curve name="/gait/leg_params/leg1/stride_length" color="#ff7f0e"/>
+       <curve name="/gait/toe_params/leg1/step_length" color="#f14cc1"/>
+       <curve name="/gait/toe_params/leg1/stride_length" color="#9467bd"/>
+       <curve name="/gait/AVG_params/leg1/step_length" color="#17becf"/>
+       <curve name="/gait/AVG_params/leg1/stride_length" color="#bcbd22"/>
+       <curve name="/gait/leg_params/cadence" color="#1f77b4"/>
+       <curve name="/gait/toe_params/cadence" color="#1ac938"/>
+       <curve name="/toe_detection/left_toe/point/x" color="#1f77b4"/>
       </plot>
      </DockArea>
     </DockSplitter>
    </Container>
   </Tab>
-  <Tab tab_name="left" containers="1">
+  <Tab containers="1" tab_name="right">
    <Container>
-    <DockSplitter orientation="-" sizes="1" count="1">
+    <DockSplitter count="1" orientation="-" sizes="1">
      <DockArea name="...">
-      <plot flip_x="false" flip_y="false" style="Lines" mode="TimeSeries">
-       <range left="-0.192175" top="-0.073592" bottom="-1.285201" right="31.510833"/>
+      <plot mode="TimeSeries" style="Lines" flip_y="false" flip_x="false">
+       <range top="0.851582" right="17.966227" left="0.231589" bottom="-1.303968"/>
        <limitY/>
-       <curve color="#f14cc1" name="/gait/leg_params/leg2/cadence"/>
-       <curve color="#9467bd" name="/gait/leg_params/leg2/step_length"/>
-       <curve color="#17becf" name="/gait/leg_params/leg2/stride_length"/>
-       <curve color="#bcbd22" name="/gait/toe_params/leg2/cadence"/>
-       <curve color="#1f77b4" name="/gait/toe_params/leg2/step_length"/>
-       <curve color="#d62728" name="/gait/toe_params/leg2/stride_length"/>
-       <curve color="#1ac938" name="/leg_detection/people_msg_stamped/leg2/position/x"/>
-       <curve color="#ff7f0e" name="/toe_detection/left_toe/point/x"/>
+       <curve name="/gait/leg_params/leg2/cadence" color="#f14cc1"/>
+       <curve name="/gait/leg_params/leg2/step_length" color="#9467bd"/>
+       <curve name="/gait/leg_params/leg2/stride_length" color="#17becf"/>
+       <curve name="/gait/toe_params/leg2/cadence" color="#bcbd22"/>
+       <curve name="/gait/toe_params/leg2/step_length" color="#1f77b4"/>
+       <curve name="/gait/toe_params/leg2/stride_length" color="#d62728"/>
+       <curve name="/leg_detection/people_msg_stamped/leg2/position/x" color="#1ac938"/>
+       <curve name="/toe_detection/right_toe/point/x" color="#d62728"/>
       </plot>
      </DockArea>
     </DockSplitter>
    </Container>
   </Tab>
-  <currentTabIndex index="1"/>
+  <currentTabIndex index="0"/>
  </tabbed_widget>
  <use_relative_time_offset enabled="1"/>
  <!-- - - - - - - - - - - - - - - -->
@@ -82,6 +82,8 @@
   <plugin ID="ROS Topic Re-Publisher"/>
  </Plugins>
  <!-- - - - - - - - - - - - - - - -->
+ <previouslyLoaded_Datafiles/>
+ <previouslyLoaded_Streamer name="ROS Topic Subscriber"/>
  <!-- - - - - - - - - - - - - - - -->
  <customMathEquations/>
  <snippets/>

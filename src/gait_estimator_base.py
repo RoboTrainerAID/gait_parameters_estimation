@@ -10,7 +10,7 @@ import scipy.signal as signal
 import rospy
 from wflc import WFLC
 import Queue
-from geometry_msgs.msg import WrenchStamped, TwistStamped, PointStamped, PolygonStamped, Vector3
+from geometry_msgs.msg import WrenchStamped, TwistStamped, PointStamped, PolygonStamped, Vector3, PoseArray
 from ipr_helpers.msg import Pose2DStamped
 from multiprocessing import Process, Pipe
 from multiprocessing import Queue as MQ
@@ -62,7 +62,7 @@ class EstimatorBase(object):
             fs = 1.0 / delta_t
             self._vel_fs = 0.05 * fs + 0.95 * self._vel_fs
 
-        self._vel_data.append(data.twist)
+        self._vel_data.append(data)
         self._last_vel_time = t_now
 
     #estimate sampling frequency for one window
@@ -80,7 +80,7 @@ class EstimatorBase(object):
 
     #estimate speed of robot for window
     def get_avg_speed(self):
-        speeds = self._vel_data
+        speeds = self._vel_data.twist
         
         
         if not speeds:

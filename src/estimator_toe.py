@@ -3,6 +3,7 @@ from gait_estimator_base import EstimatorBase
 from gait_estimator_base import *
 from threading import Lock
 from message_filters import ApproximateTimeSynchronizer, Subscriber
+import matplotlib.pyplot as plt
 
 
 class EstimatorToe(EstimatorBase):
@@ -15,12 +16,31 @@ class EstimatorToe(EstimatorBase):
         self._left_toe = []
 
         self._tlock = Lock()
+        self._sub_toes = rospy.Subscriber("/toe_detection/toe_positions", PoseArray, self.listen_toes)
         self._sub_rtoe_sync = Subscriber("/toe_detection/right_toe",PointStamped)
         self._sub_ltoe_sync = Subscriber("/toe_detection/left_toe",PointStamped)
         self._ats = ApproximateTimeSynchronizer([self._sub_rtoe_sync, self._sub_ltoe_sync], queue_size=5, slop=0.2)
         self._ats.registerCallback(self.toe_sync)
 
+    def listen_toes(self, data):
+        self._tlock.acquire()
+        try:
+            left_toe_point = PointStamped()
+            left_toe_point.header = data.header
+            left_toe_point.point = data.poses[0].position
 
+            right_toe_point = PointStamped()
+            right_toe_point.header = data.header
+            right_toe_point.point = data.poses[1].position
+
+            self._left_toe.append(left_toe_point)
+            self._right_toe.append(right_toe_point)
+            if len(self._right_toe) > 3:
+                fs = self.est_fs(self._right_toe[-3:])
+                if fs > 0.0:
+                    self._fs = (0.1 * fs + 0.9 * self._fs)
+        finally:
+            self._tlock.release()
 
     #Listen to Topic for toe position
     def toe_sync(self, right_toe, left_toe):
@@ -75,14 +95,36 @@ class EstimatorToe(EstimatorBase):
         self.get_avg_speed()
         self.set_pose_win()
 
+        print(self._window_vel)
+        print(self._pose_fs)
+        print(self._fs)
+        print("Length of left toe window: ", len(ltoe_window))
+        print("Length of right toe window: ", len(rtoe_window))
 
         rtime = [rt.header.stamp.to_sec() for rt in rtoe_window]
-        if len(rtoe_window) < len(ltoe_window):
-            ltoe_window = self.remove_toes(rtoe_window, ltoe_window)
-            rtime = [rt.header.stamp.to_sec() for rt in rtoe_window]
-        elif len(ltoe_window) < len(rtoe_window):
-            rtoe_window = self.remove_toes(ltoe_window, rtoe_window)
-            rtime = [lt.header.stamp.to_sec() for lt in ltoe_window]
+
+        # TODO: (Andreas) This should never happen because toes are synced
+        # if len(rtoe_window) < len(ltoe_window):
+        #     ltoe_window = self.remove_toes(rtoe_window, ltoe_window)
+        #     rtime = [rt.header.stamp.to_sec() for rt in rtoe_window]
+        # elif len(ltoe_window) < len(rtoe_window):
+        #     rtoe_window = self.remove_toes(ltoe_window, rtoe_window)
+        #     rtime = [lt.header.stamp.to_sec() for lt in ltoe_window]
+        if len(rtoe_window) != len(ltoe_window):
+            rospy.logerr("Length of left toe window and right toe window are not equal, return estimator_toe method")
+
+            params = gp()
+            params.header.stamp = rospy.Time.now()
+            params.leg1 = leg1_param
+            params.leg2 = leg2_param
+            ret_dict = {}
+            ret_dict['/gait/toe_params'] = params
+
+            try:
+                pipe.put(ret_dict, block = True, timeout = 0.1)
+            except Queue.Full:
+                rospy.logwarn("Pipe is full, unable to send data.")
+            return
 
 
         ltoe_rms = [lt.point.x ** 2 + lt.point.y ** 2 for lt in ltoe_window]
@@ -113,6 +155,8 @@ class EstimatorToe(EstimatorBase):
                     rospy.logerr("ValueError in smooth_data: %s", str(e))
                     value_error = True
 
+
+
         params = gp()
         params.header.stamp = rospy.Time.now()
 
@@ -129,6 +173,9 @@ class EstimatorToe(EstimatorBase):
             params.cadence = cad 
             params.cadence_avg = cad_avg 
 
+        print("cadence: ", params.cadence)
+        print("cadence_avg: ", params.cadence_avg)
+
 
         leg1_param = leg_params()
         leg2_param = leg_params()
@@ -137,15 +184,49 @@ class EstimatorToe(EstimatorBase):
         min_peak_dist = self._fs * (1.0 / self._highcut) * 2 
         pkwidth = self._fs * (0.1 / self._highcut) if self._fs * (0.1 / self._highcut) > 1.0 else 1.0
 
+        print("min_peak_dist: ", min_peak_dist)
+        print("pkwidth: ", pkwidth)
+
         if min_peak_dist < 1.0:
             # signal.find_peaks requires a minimum distance of 1.0
             rospy.logerr("min_peak_dist is < 1, return estimator_toe method")
+
+            params.leg1 = leg1_param
+            params.leg2 = leg2_param
+            ret_dict = {}
+            ret_dict['/gait/toe_params'] = params
+
+            try:
+                pipe.put(ret_dict, block = True, timeout = 0.1)
+            except Queue.Full:
+                rospy.logwarn("Pipe is full, unable to send data.")
             return
 
-        peak_indexes_l1, _ = signal.find_peaks(ltoe_rms,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
-        valley_indexes_l1, _ = signal.find_peaks(-ltoe_rms,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
-        peak_indexes_l2, _ = signal.find_peaks(rtoe_rms,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
-        valley_indexes_l2, _ = signal.find_peaks(-rtoe_rms,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
+        peak_indexes_l1, _ = signal.find_peaks(ltoe_rms, distance=min_peak_dist, prominence=0.025, width=pkwidth)
+        valley_indexes_l1, _ = signal.find_peaks(-ltoe_rms, distance=min_peak_dist, prominence=0.025, width=pkwidth)
+        peak_indexes_l2, _ = signal.find_peaks(rtoe_rms, distance=min_peak_dist, prominence=0.025, width=pkwidth)
+        valley_indexes_l2, _ = signal.find_peaks(-rtoe_rms, distance=min_peak_dist, prominence=0.025, width=pkwidth)
+
+        # # Plot the three time series together
+        # plt.figure(figsize=(8, 5))
+        # plt.plot(rtime, ltoe_rms, label='Left Toe RMS', alpha=0.7)
+        # plt.plot(rtime, rtoe_rms, label='Right Toe RMS', alpha=0.7)
+        # plt.plot(rtime, toe_diff, label='Toe Diff', alpha=0.7)
+        # plt.plot(rtime, td_bandpassed, label='Toe Diff Bandpassed', alpha=0.7)
+        # plt.plot(rtime, toe_diff_smoothed, label='Toe Diff Smoothed', alpha=0.7)
+
+        # # Add peaks and valleys as dots
+        # plt.scatter([rtime[i] for i in peak_indexes_l1], [ltoe_rms[i] for i in peak_indexes_l1], color='red', label='Left Toe Peaks', zorder=5)
+        # plt.scatter([rtime[i] for i in valley_indexes_l1], [ltoe_rms[i] for i in valley_indexes_l1], color='blue', label='Left Toe Valleys', zorder=5)
+        # plt.scatter([rtime[i] for i in peak_indexes_l2], [rtoe_rms[i] for i in peak_indexes_l2], color='green', label='Right Toe Peaks', zorder=5)
+        # plt.scatter([rtime[i] for i in valley_indexes_l2], [rtoe_rms[i] for i in valley_indexes_l2], color='orange', label='Right Toe Valleys', zorder=5)
+
+        # plt.xlabel('Time (s)')
+        # plt.ylabel('Distance')
+        # plt.title('Toe RMS and Toe Difference')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.show()
 
         if self._window_vel[0] == max(self._window_vel):
             if self._window_vel[0] >= 0:
@@ -221,9 +302,9 @@ class EstimatorToe(EstimatorBase):
         #since we're using RMS (absolute distance) peak = TO (maximum distance), valley = HS (minimum distance)
         min_peak_dist = self._fs * (1.0 / self._highcut) * 2
         pkwidth = self._fs * (0.1 / self._highcut) if self._fs * (0.1 / self._highcut) > 1.0 else 1.0
-        # peak_indexes_l1, _ = signal.find_peaks(leg1,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
+        peak_indexes_l1, _ = signal.find_peaks(leg1,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
         valley_indexes_l1, _ = signal.find_peaks(-leg1,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
-        # peak_indexes_l2, _ = signal.find_peaks(leg2,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
+        peak_indexes_l2, _ = signal.find_peaks(leg2,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
         valley_indexes_l2, _ = signal.find_peaks(-leg2,distance = min_peak_dist, prominence = 0.025, width = pkwidth)
 
         #TODO: (Andreas) unused
@@ -234,6 +315,30 @@ class EstimatorToe(EstimatorBase):
         # hs_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
 
         xc,yc = prep.interpolated_intercept(np.array(time_stamps), leg1, leg2)
+
+        # plt.figure(figsize=(8, 5))
+        # plt.plot(time_stamps, leg1, label='Leg1 (Left Toe)', alpha=0.7)
+        # plt.plot(time_stamps, leg2, label='Leg2 (Right Toe)', alpha=0.7)
+
+        # # Add peaks and valleys
+        # plt.scatter([time_stamps[i] for i in peak_indexes_l1], [leg1[i] for i in peak_indexes_l1],
+        #             color='red', label='Leg1 Peaks', zorder=5)
+        # plt.scatter([time_stamps[i] for i in valley_indexes_l1], [leg1[i] for i in valley_indexes_l1],
+        #             color='blue', label='Leg1 Valleys', zorder=5)
+        # plt.scatter([time_stamps[i] for i in peak_indexes_l2], [leg2[i] for i in peak_indexes_l2],
+        #             color='green', label='Leg2 Peaks', zorder=5)
+        # plt.scatter([time_stamps[i] for i in valley_indexes_l2], [leg2[i] for i in valley_indexes_l2],
+        #             color='orange', label='Leg2 Valleys', zorder=5)
+
+        # # Visualize interpolated intercept
+        # plt.scatter(xc, yc, color='black', label='Interpolated Intercept', marker='x', zorder=6)
+
+        # plt.xlabel('Time (s)')
+        # plt.ylabel('Distance')
+        # plt.title('Leg1 and Leg2 Timeseries with Peaks, Valleys, and Intercept')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.show()
         
         xc_ind = []
         

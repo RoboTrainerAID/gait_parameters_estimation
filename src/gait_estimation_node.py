@@ -40,7 +40,9 @@ pub_dicts['/gait/toe_band'] = toe_band
 pub_dicts['/gait/shoulder_params'] = shoulder_pub
 pub_dicts['/gait/shoulder_band'] = shoulder_band
 
-#fuse parameter estimations from each sensor using wls (weighted least squares)
+# fuse parameter estimations from each sensor using wls (weighted least squares)
+
+
 def WLS(results):
     ws = []
     b = []
@@ -73,9 +75,9 @@ def WLS(results):
         ws.append(w)
         b.append(results[k].cadence_avg)
         b_avg.append(results[k].cadence_avg)
-        
-        if k == 'legs' or k =='toe':
-            #Camera Data from Toe is more accurate in regards to distance measurements
+
+        if k == 'legs' or k == 'toe':
+            # Camera Data from Toe is more accurate in regards to distance measurements
             if k == 'toe':
                 weight = 2.0
             else:
@@ -117,7 +119,7 @@ def WLS(results):
 
         wls_param.header.stamp = results[k].header.stamp
         avg_param.header.stamp = results[k].header.stamp
-    
+
     cad = sum([1.0 / weight for weight in ws]) ** (-1) * sum([b[i] / ws[i] for i in range(len(ws))])
     cad_avg = sum([1.0 / weight for weight in ws]) ** (-1) * sum([b_avg[i] / ws[i] for i in range(len(ws))])
     wls_param.cadence = cad
@@ -145,7 +147,7 @@ def WLS(results):
 
     if len(l1_stride_intervall) > 0:
         wls_param.leg1.stride_intervall = sum(l1_stride_intervall) / total_weight
-    if len(l1_stride_intervall) > 0:    
+    if len(l1_stride_intervall) > 0:
         wls_param.leg2.stride_intervall = sum(l2_stride_intervall) / total_weight
 
     if len(leg1_cad) > 0:
@@ -164,7 +166,7 @@ def WLS(results):
     avg_pub.publish(avg_param)
 
 
-#periodic thread that starts parameter estimation for each sensor
+# periodic thread that starts parameter estimation for each sensor
 def collect_data(event):
 
     t1 = rospy.Time.now()
@@ -177,9 +179,9 @@ def collect_data(event):
         if win is None:
             rospy.loginfo("Win is None for %s", k)
         if win is not None:
-            #start gait estimation process for each sensor if data available
+            # start gait estimation process for each sensor if data available
             queue = MQ()
-            proc = Process(target = est.gait_estimation, args = (win, queue))
+            proc = Process(target=est.gait_estimation, args=(win, queue))
             rospy.loginfo("Added %s Process", k)
             pipes.append(queue)
             processes.append(proc)
@@ -190,43 +192,43 @@ def collect_data(event):
     start = rospy.Time.now()
     stamp = rospy.Time.now()
     Results = {}
-    #join process, abort if one process freezes
-    while (rospy.Time.now() - start).to_sec() <= 4.0:
-            for i in range(len(processes)):
-                try:
-                    param_dict = pipes[i].get(block = True, timeout = 0.2)
-                    for k in param_dict.keys():
-                        topic = k
-                        pub = pub_dicts[k]
-                        params = param_dict[k]
-                        if not 'band' in k:
-                            params.header.stamp = stamp
-                            rospy.loginfo("Got params for topic %s", k)
-                            pub.publish(params)
-                            res_key = ''
-                            #add result to dictionary used for fusion
-                            if 'force' in k:
-                                res_key = 'force'
-                            if 'leg' in k:
-                                res_key = 'legs'
-                            if 'toe' in k:
-                                res_key = 'toe'
-                            if 'shoulder' in k:
-                                res_key = 'shoulder'
-                            Results[res_key] = params
-                        if 'band' in k:
-                            #only used for debug purposes
-                            rospy.loginfo("number of elements in params %d", len(params))
-                            for point in params:
-                                pub_dicts[k].publish(point)
-                    processes[i].join()
-                except Queue.Empty:
-                    rospy.loginfo("Data on pipe %s, not ready yet", processes_names[i])   
-            if any(p.is_alive() for p in processes):
-                rospy.loginfo("Process sleep")
-                rospy.sleep(0.01)
-            else:
-                break
+    # join process, abort if one process freezes
+    while (rospy.Time.now() - start).to_sec() <= 1.5:
+        for i in range(len(processes)):
+            try:
+                param_dict = pipes[i].get(block=True, timeout=0.2)
+                for k in param_dict.keys():
+                    topic = k
+                    pub = pub_dicts[k]
+                    params = param_dict[k]
+                    if not 'band' in k:
+                        params.header.stamp = stamp
+                        rospy.loginfo("Got params for topic %s", k)
+                        pub.publish(params)
+                        res_key = ''
+                        # add result to dictionary used for fusion
+                        if 'force' in k:
+                            res_key = 'force'
+                        if 'leg' in k:
+                            res_key = 'legs'
+                        if 'toe' in k:
+                            res_key = 'toe'
+                        if 'shoulder' in k:
+                            res_key = 'shoulder'
+                        Results[res_key] = params
+                    if 'band' in k:
+                        # only used for debug purposes
+                        rospy.loginfo("number of elements in params %d", len(params))
+                        for point in params:
+                            pub_dicts[k].publish(point)
+                processes[i].join()
+            except Queue.Empty:
+                rospy.loginfo("Data on pipe %s, not ready yet", processes_names[i])
+        if any(p.is_alive() for p in processes):
+            rospy.loginfo("Process sleep")
+            rospy.sleep(0.01)
+        else:
+            break
     else:
         rospy.loginfo("!! Process join timeout")
         for p in processes:
@@ -241,17 +243,11 @@ def collect_data(event):
     if processes:
         WLS(Results)
         rospy.loginfo("Main loop execute time %.8f ", (rospy.Time.now() - t1).to_sec())
-        
-
-
-
-
-
 
 
 if __name__ == '__main__':
     import sys
-    
+
     rospy.init_node('gait_estimation', log_level=rospy.INFO)
     rospy.get_rostime()
     rospy.get_time()
@@ -280,7 +276,7 @@ if __name__ == '__main__':
 
     rospy.sleep(rospy.Duration(window_size))
     rospy.loginfo("Start Timed thread")
-    #periodic thread which collects available data, and gives signal to estimate parameters
+    # periodic thread which collects available data, and gives signal to estimate parameters
     rospy.timer.Timer(rospy.Duration(window_step), collect_data)
 
     while not rospy.is_shutdown():

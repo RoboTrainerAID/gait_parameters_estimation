@@ -1,0 +1,23 @@
+<launch>
+    
+    <arg name="from_bag" default="true"/>
+    <arg name="use_toe" default="true"/>
+    <arg name="use_leg" default="false"/>
+    <arg name="use_shoulder" default="false"/>
+    <arg name="use_force" default="false"/>
+
+    <!-- ROBOT URDF -->
+    <include if="$(arg from_bag)" file="$(find za_experimental)/launch/urdf_standalone.launch" />
+
+    <node pkg="gait_parameters_estimation" name="gait_estimation" type="estimator_toe_refactor.py" output="screen">
+        <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+        <param name="use_toe" value="$(arg use_toe)"/>
+        <param name="use_leg" value="$(arg use_leg)"/>
+        <param name="use_shoulder" value="$(arg use_shoulder)"/>
+        <param name="use_force" value="$(arg use_force)"/>
+        <param name="from_bag" value="$(arg from_bag)"/>
+        <!-- <param name="window_size" value="10"/>
+        <param name="window_step" value="1.0"/> -->
+    </node>
+
+</launch>

@@ -21,7 +21,7 @@ class EstimatorLegs(EstimatorBase):
         self._llock.acquire()
         try:
             #Stamp are not unique, so reassign them here.  
-            data.header.stamp = rospy.Time.now()
+            # data.header.stamp = rospy.Time.now()
             self._data.append(data)
             if len(self._data) > 3:
                 fs = self.est_fs(self._data[-3:])
@@ -105,7 +105,7 @@ class EstimatorLegs(EstimatorBase):
                     value_error = True
 
         params = gp()
-        params.header.stamp = rospy.Time.now()
+        params.header.stamp = window[-1].header.stamp
 
         debugs = []
         

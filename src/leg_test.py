@@ -112,7 +112,7 @@ def pub_force(event):
 
 def transform_sensor(data):
         try:
-            tf = tfBuffer.lookup_transform('fts_reference_link','fts_base_link', rospy.Time().now(), timeout = rospy.Duration(0.1))
+            tf = tfBuffer.lookup_transform('fts_reference_link','fts_base_link', rospy.Time(0), timeout = rospy.Duration(0.1))
             data_tf = tf2_geometry_msgs.do_transform_wrench(data, tf)
             data_tf.header.stamp = data.header.stamp
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
@@ -159,7 +159,7 @@ def pub_should(event):
 
         tf = None
         try:
-            tf = tfBuffer.lookup_transform('upper_body_camera_rgb_optical_frame','base_link', rospy.Time().now(), timeout = rospy.Duration(1.0))
+            tf = tfBuffer.lookup_transform('upper_body_camera_rgb_optical_frame','base_link', rospy.Time(0), timeout = rospy.Duration(1.0))
         except Exception:
             rospy.loginfo("No transform for shoulder")
         if tf:

@@ -194,7 +194,7 @@ class GaitEstimation():
 
     def transform_sensor(self, data):
         try:
-            tf = self._tfBuffer.lookup_transform('fts_base_link','fts_reference_link', rospy.Time().now(), timeout = rospy.Duration(0.1))
+            tf = self._tfBuffer.lookup_transform('fts_base_link','fts_reference_link', rospy.Time(0), timeout = rospy.Duration(0.1))
             data_tf = tf2_geometry_msgs.do_transform_wrench(data, tf)
             data_tf.header = data.header
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
@@ -219,7 +219,7 @@ class GaitEstimation():
         
     def list_shoulders(self,data):
         try:
-            tf = self._tfBuffer.lookup_transform('base_link','upper_body_camera_rgb_optical_frame', rospy.Time().now(), timeout = rospy.Duration(1.0))
+            tf = self._tfBuffer.lookup_transform('base_link','upper_body_camera_rgb_optical_frame', rospy.Time(0), timeout = rospy.Duration(1.0))
             l_shoulder, r_shoulder = self.to_PointStamped(data)
             l_shoulder_tf = tf2_geometry_msgs.do_transform_point(l_shoulder, tf)
             r_shoulder_tf = tf2_geometry_msgs.do_transform_point(r_shoulder, tf)

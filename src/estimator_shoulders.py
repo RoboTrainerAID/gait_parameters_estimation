@@ -28,15 +28,15 @@ class EstimatorShoulder(EstimatorBase):
     #Listen to point given by body detection and transform to base_link
     def list_shoulders(self,data):
         #messed up stamps again?
-        time = rospy.Time.now()
+        # time = rospy.Time.now()
         try:
-            tf = self._tfBuffer.lookup_transform('base_link','upper_body_camera_rgb_optical_frame', rospy.Time().now(), timeout = rospy.Duration(1.0))
+            tf = self._tfBuffer.lookup_transform('base_link','upper_body_camera_rgb_optical_frame', rospy.Time(0), timeout = rospy.Duration(1.0))
             l_shoulder, r_shoulder = self.to_PointStamped(data)
             l_shoulder_tf = tf2_geometry_msgs.do_transform_point(l_shoulder, tf)
             r_shoulder_tf = tf2_geometry_msgs.do_transform_point(r_shoulder, tf)
 
-            l_shoulder_tf.header.stamp = time
-            r_shoulder_tf.header.stamp = time
+            # l_shoulder_tf.header.stamp = time
+            # r_shoulder_tf.header.stamp = time
 
             self._lsh_pub.publish(l_shoulder_tf)
             self._rsh_pub.publish(r_shoulder_tf)
@@ -74,7 +74,8 @@ class EstimatorShoulder(EstimatorBase):
         l_shoulder = PointStamped()
         r_shoulder = PointStamped()
 
-
+        l_shoulder.header = data.header
+        r_shoulder.header = data.header
         l_shoulder.point = data.polygon.points[5]
         r_shoulder.point = data.polygon.points[2]
 
@@ -117,7 +118,7 @@ class EstimatorShoulder(EstimatorBase):
         sh2_cad, sh2_cad_avg, debugs_2 = self._wflcH.wflc(bandpassed_rsh, self._fs, plt_seqs, debug_plt, t = time_stamps)
 
         gait_params = gp()
-        gait_params.header.stamp = rospy.Time.now()
+        gait_params.header.stamp = window[-1][0].header.stamp
         gait_params.cadence = (sh1_cad * 2.0 + sh2_cad * 2.0 ) / 2.0
         gait_params.cadence_avg = sh1_cad_avg + sh2_cad_avg
         gait_params.dst = 0.0

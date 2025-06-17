@@ -34,7 +34,7 @@ class EstimatorForce(EstimatorBase):
 
     def transform_sensor(self, data):
         try:
-            tf = self._tfBuffer.lookup_transform('fts_base_link','fts_reference_link', rospy.Time().now(), timeout = rospy.Duration(0.1))
+            tf = self._tfBuffer.lookup_transform('fts_base_link','fts_reference_link', rospy.Time(0), timeout = rospy.Duration(0.1))
             data_tf = tf2_geometry_msgs.do_transform_wrench(data, tf)
             data_tf.header = data.header
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
@@ -77,7 +77,7 @@ class EstimatorForce(EstimatorBase):
         torque_z = np.array([w.wrench.torque.z for w in window])
 
         params = gp()
-        params.header.stamp = rospy.Time.now()
+        params.header.stamp = window[-1].header.stamp
         order = 3
         
         #preprocess data by applying lowpass filter to smoothe and bandpass filter to filter signals outside of gait cadence

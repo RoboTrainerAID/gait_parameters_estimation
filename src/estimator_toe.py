@@ -114,7 +114,7 @@ class EstimatorToe(EstimatorBase):
             rospy.logerr("Length of left toe window and right toe window are not equal, return estimator_toe method")
 
             params = gp()
-            params.header.stamp = rospy.Time.now()
+            params.header.stamp = window[0][-1].header.stamp
             params.leg1 = leg1_param
             params.leg2 = leg2_param
             ret_dict = {}
@@ -158,7 +158,7 @@ class EstimatorToe(EstimatorBase):
 
 
         params = gp()
-        params.header.stamp = rospy.Time.now()
+        params.header.stamp = window[0][-1].header.stamp
 
         debug_plt = []
         plt_ind = []

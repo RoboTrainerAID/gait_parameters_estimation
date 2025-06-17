@@ -149,8 +149,8 @@ class WFLC(object):
                         #rospy.loginfo("elements in history %d ", len(self._w_hist))
                         w_blw_threshold = [w for w in self._w_hist if (sum(np.abs(w))) <= 0.00]
                         msg = gp()
-                        #msg.header.stamp = elem.header.stamp
-                        msg.header.stamp = rospy.Time.now()
+                        msg.header.stamp = elem.header.stamp
+                        # msg.header.stamp = rospy.Time.now()
                         if len(w_blw_threshold) >= len(self._w_hist) * 0.75:
                             msg.cadence = 0
                             #rospy.loginfo("WFLCC: Cadence zero because weights %s", self._w)

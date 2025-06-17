@@ -8,13 +8,9 @@ import gait_preprocessing as prep
 import numpy as np
 import scipy.signal as signal
 import rospy
-import tf.transformations
 from wflc import WFLC
-import Queue
 from geometry_msgs.msg import WrenchStamped, TwistStamped, PointStamped, PolygonStamped, Vector3, PoseArray
 from ipr_helpers.msg import Pose2DStamped
-from multiprocessing import Process, Pipe
-from multiprocessing import Queue as MQ
 from gait_parameters_estimation.msg import gait_params as gp
 from gait_parameters_estimation.msg import leg_params as leg_params
 from threading import Lock
@@ -121,12 +117,8 @@ class EstimatorBaseRefactor(object):
         self._wflcH = WFLC(self._lowcut, rospy.get_param('/gait_estimation/'+sensor+'/freq_update'),
                            rospy.get_param('/gait_estimation/'+sensor+'/amp_update'), topic_prefix=sensor + 'H')
         
-        self._from_bag = rospy.get_param('/gait_estimation/from_bag', False)
-
         self._window_vel = [0, 0, 0]
         self._window_poses = []
-        self._last_vel_time = rospy.Time.now()
-        self._data_window = Queue.Queue()
 
         self.velocity_data = TimeSeriesData(self._vel_fs, self._window_size, self._window_step)
         self.pose_data = TimeSeriesData(self._pose_fs, self._window_size, self._window_step)
@@ -139,25 +131,6 @@ class EstimatorBaseRefactor(object):
         with self.pose_data.lock:
             self.pose_data.data.append(data)
             self.pose_data.est_fs_and_update(5)
-
-            # If we are reading from a bag, we should publish the map to base_link transform
-            if self._from_bag:
-                # Pose2DStamped give the angle theta around the z-axis
-                q = tf.transformations.quaternion_about_axis(data.pose.theta, (0, 0, 1))
-
-                t = TransformStamped()
-                t.header.stamp = rospy.Time.now()
-                t.header.frame_id = data.header.frame_id # Should be 'map' frame
-                t.child_frame_id = 'base_link'
-                t.transform.translation.x = data.pose.x
-                t.transform.translation.y = data.pose.y
-                t.transform.rotation.x = q[0]
-                t.transform.rotation.y = q[1]
-                t.transform.rotation.z = q[2]
-                t.transform.rotation.w = q[3]
-
-                br = tf.TransformBroadcaster()
-                br.sendTransformMessage(t)
 
     # record robot velocity to check for movement
     def listen_speed(self, data):
@@ -312,6 +285,6 @@ class EstimatorBaseRefactor(object):
     # def get_window(self):
     #     pass
 
-    @abstractmethod
-    def gait_estimation(self, data, pipe):
-        pass
+    # @abstractmethod
+    # def gait_estimation(self, data, pipe):
+    #     pass

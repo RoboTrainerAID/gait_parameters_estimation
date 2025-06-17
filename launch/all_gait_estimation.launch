@@ -1,13 +1,14 @@
+<?xml version="1.0"?>
 <launch>
     
-    <arg name="from_bag" default="true"/>
+    <arg name="launch_from_bag" default="true"/>
     <arg name="use_toe" default="true"/>
     <arg name="use_leg" default="false"/>
     <arg name="use_shoulder" default="false"/>
     <arg name="use_force" default="false"/>
 
     <!-- ROBOT URDF -->
-    <include if="$(arg from_bag)" file="$(find za_experimental)/launch/urdf_standalone.launch" />
+    <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/launch_from_bag_urdf_and_tf.launch" />
 
     <!-- Transforms for from_bag launch -->
     <!-- <node name="robot_lower_legs_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="-0.031 -0.000 0.731 -0.423 -0.000 0.906 -0.000 base_link lower_legs_camera_link" />
@@ -26,7 +27,7 @@
 
     <!-- TOE DETECTION WITH LOWER DEPTH CAMERA -->
     <group if="$(arg use_toe)">
-        <include unless="$(arg from_bag)" file="$(find gait_parameters_estimation)/launch/camera.launch">
+        <include unless="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/camera.launch">
             <arg name="camera_name" value="lower_legs_camera"/>
         </include>
         <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" />
@@ -41,7 +42,7 @@
 
     <!-- SHOULDER DETECTION WITH UPPER DEPTH CAMERA AND OPENPOSE -->
     <group if="$(arg use_shoulder)">
-        <include unless="$(arg from_bag)" file="$(human_body_detection)/launch/human_body_detection_asus.launch" />
+        <include unless="$(arg launch_from_bag)" file="$(human_body_detection)/launch/human_body_detection_asus.launch" />
 
         <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
             <rosparam command="load" file="$(find gait_parameters_estimation)/include/KalmanFilterParameters.yaml"/>
@@ -54,7 +55,7 @@
     </group>
 
     <!-- GAIT ESTIMATION -->
-    <include unless="$(arg from_bag)" file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" />
+    <include unless="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" />
     <!-- <include file="$(find gait_parameters_estimation)/launch/gait_estimation.launch" /> -->
 
     <!-- <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
@@ -71,7 +72,6 @@
         <param name="use_leg" value="$(arg use_leg)"/>
         <param name="use_shoulder" value="$(arg use_shoulder)"/>
         <param name="use_force" value="$(arg use_force)"/>
-        <param name="from_bag" value="$(arg from_bag)"/>
         <!-- <param name="window_size" value="10"/>
         <param name="window_step" value="1.0"/> -->
     </node>

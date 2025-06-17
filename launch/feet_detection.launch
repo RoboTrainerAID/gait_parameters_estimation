@@ -17,7 +17,7 @@
         <param name="foot_length" value="0.32" />
         <param name="foot_height" value="0.14" />
         <param name="perform_side_init" value="-1" />
-        <rosparam command="load" file="$(find camera_lower_leg_tracking)/include/KalmanFilterParameters.yaml"/>
+        <rosparam command="load" file="$(find camera_lower_leg_tracking)/config/KalmanFilterParameters.yaml"/>
     </node>
     
 </launch>

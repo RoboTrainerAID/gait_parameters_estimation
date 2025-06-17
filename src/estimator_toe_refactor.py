@@ -69,8 +69,7 @@ class EstimatorToeRefactor(EstimatorBaseRefactor):
         return True
 
     # estimate gait parameters from toe positions
-
-    def gait_estimation(self, args=None):
+    def gait_estimation(self, timer_event):
 
         start_time = rospy.Time.now().to_sec()
 
@@ -110,7 +109,7 @@ class EstimatorToeRefactor(EstimatorBaseRefactor):
         right_toe_norm = np.sqrt(right_sumsq)
 
         params = gp()
-        params.header.stamp = rospy.Time.now()
+        params.header.stamp = window_toe[-1].header.stamp
 
         debug_plt = []
         plt_ind = []
@@ -292,7 +291,7 @@ class EstimatorToeRefactor(EstimatorBaseRefactor):
             q = tf.transformations.quaternion_about_axis(pose_at_toe_point.pose.theta, (0, 0, 1))
 
             t = TransformStamped()
-            t.header.stamp = rospy.Time.now()
+            t.header.stamp = pose_at_toe_point.header.stamp
             t.header.frame_id = pose_at_toe_point.header.frame_id  # Should be 'map' frame
             t.child_frame_id = toe_point.header.frame_id  # Should be 'base_link' frame
             t.transform.translation.x = pose_at_toe_point.pose.x

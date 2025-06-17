@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="gait_parameters_estimation" name="publish_transform_from_topic" type="publish_transform_from_topic.py" output="screen" />
+
+    <include file="$(find za_experimental)/launch/urdf_standalone.launch" />
+
+</launch>

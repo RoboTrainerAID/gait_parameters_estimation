@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<launch>
+    <include file="$(find za_experimental)/launch/rviz.launch" />
+
+
+    <arg name="robot" default="robotrainer2" />
+	<arg name="pkg_hardware_config" default="$(find cob_hardware_config)"/>
+    <arg name="base_wheel_config_yaml" default="$(find robotrainer_config)/hardware/rt2_base_wheel_configuration.yaml"/>
+
+    <rosparam command="load" ns="base" file="$(arg base_wheel_config_yaml)"/>
+    <param name="robot_description" command="$(find xacro)/xacro '$(arg pkg_hardware_config)/robots/$(arg robot)/urdf/$(arg robot).urdf.xacro'" />
+	<rosparam command="load" ns="/script_server/base" file="$(find cob_default_robot_config)/robots/$(arg robot)/script_server/base_configurations.yaml"/>
+	<rosparam command="load" ns="/script_server/light_base" file="$(find cob_default_robot_config)/robots/$(arg robot)/script_server/light_base_configurations.yaml"/>
+
+    <!-- <arg name="scenario_parameters" value="sim:=false"/>
+    <param name="sensor_description" command="$(find xacro)/xacro '$(find ati_force_torque)/description/urdf/sensor_mini58.urdf.xacro' $(arg scenario_parameters)"/>
+
+    <node ns="fts" pkg="robot_state_publisher" type="robot_state_publisher" name="sensor_state_publisher">
+        <param name="publish_frequency" type="double" value="200.0" />
+        <param name="tf_prefix" type="string" value="" />
+        <remap from="robot_description" to="sensor_description" />
+    </node> -->
+        
+</launch>

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- <arg name="camera_name" default="lower_legs_camera_realsense"/> -->
+    <arg name="camera_name" default="upper_body_camera_realsense"/>
+
+    <node name="camera_realsense_transform" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 upper_body_camera_link upper_body_camera_realsense_link" />
+
+    <!-- Realsense D455 for upper_body_camera -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch" >
+        <!-- All parameters in /opt/ros/melodic/share/realsense2_camera/launch/rs_camera.launch -->
+        <arg name="camera" value="$(arg camera_name)"/>
+        <arg name="tf_prefix" value="$(arg camera_name)"/>
+        <!-- <arg name="depth_width" value="848"/>
+        <arg name="depth_height" value="480"/>
+        <arg name="color_width" value="1280"/>
+        <arg name="color_height" value="720"/> -->
+
+        <arg name="enable_sync" value="false"/>
+        <arg name="align_depth" value="false"/>
+        <arg name="publish_tf" value="true"/>
+
+        <arg name="enable_pointcloud" value="true"/>
+        <arg name="clip_distance" value="1.5"/>
+    </include>
+
+</launch>

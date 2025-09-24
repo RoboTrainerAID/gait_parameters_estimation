@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+    
+    <!-- ROBOT URDF -->
+    <!-- <node pkg="gait_parameters_estimation" name="publish_transform_from_topic" type="publish_transform_from_topic.py" output="screen" /> -->
+
+    <!-- <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" /> -->
+
+    <!-- <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/rviz_with_urdf.launch" /> -->
+
+    <node pkg="gait_parameters_estimation" name="gait_estimation" type="estimator_toe_from_bag.py" output="screen">
+        <rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
+        <!-- <param name="window_size" value="10"/>
+        <param name="window_step" value="1.0"/> -->
+    </node>
+
+</launch>

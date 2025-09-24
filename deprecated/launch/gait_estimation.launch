@@ -9,11 +9,11 @@
     <node name="base_to_rgb_optical" pkg="tf2_ros" type="static_transform_publisher" args="0.150 0.045, 1.05 -0.420 -0.420 0.569 0.570 base_link upper_body_camera_rgb_optical_frame " />
 
     <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
-    	<rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+    	<rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
     </node>
 
     <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
-    	<rosparam command="load" file="$(find gait_parameters_estimation)/include/KalmanFilterParameters.yaml"/>
+    	<rosparam command="load" file="$(find gait_parameters_estimation)/config/KalmanFilterParameters.yaml"/>
     </node>
     <!-- include file = "$(find camera_lower_leg_tracking)/launch/toe_detection.launch" /-->
 

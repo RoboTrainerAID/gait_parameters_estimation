@@ -8,10 +8,14 @@
     <arg name="use_force" default="false"/>
 
     <!-- ROBOT URDF -->
-    <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/launch_from_bag_urdf_and_tf.launch" />
+    <!-- <node pkg="gait_parameters_estimation" name="publish_transform_from_topic" type="publish_transform_from_topic.py" output="screen" /> -->
+
+    <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" />
+
+    <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/rviz_with_urdf.launch" />
 
     <node pkg="gait_parameters_estimation" name="gait_estimation" type="estimator_toe_refactor.py" output="screen">
-        <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+        <rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
         <param name="use_toe" value="$(arg use_toe)"/>
         <param name="use_leg" value="$(arg use_leg)"/>
         <param name="use_shoulder" value="$(arg use_shoulder)"/>

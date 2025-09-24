@@ -73,11 +73,14 @@ class EstimatorToeRefactor(EstimatorBaseRefactor):
 
         start_time = rospy.Time.now().to_sec()
 
-        print("TOE DATA")
+        # print("TOE DATA")
+        # print("Length toe data: ", len(self.toe_data.data))
         window_toe = self.toe_data.get_window_by_fs()
-        print("VEL DATA")
+        # print("VEL DATA")
+        # print("Length vel data: ", len(self.velocity_data.data))
         window_vel = self.velocity_data.get_window_by_fs()
-        print("POSE DATA")
+        # print("POSE DATA")
+        # print("Length pose data: ", len(self.pose_data.data))
         window_poses = self.pose_data.get_window_by_fs()
         self._window_poses = window_poses  # for campatibility with EstimatorBase
 

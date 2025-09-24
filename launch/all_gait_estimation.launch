@@ -8,7 +8,8 @@
     <arg name="use_force" default="false"/>
 
     <!-- ROBOT URDF -->
-    <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/launch_from_bag_urdf_and_tf.launch" />
+    <!-- <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/launch_from_bag_urdf_and_tf.launch" /> -->
+    <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/rviz_with_urdf.launch" />
 
     <!-- Transforms for from_bag launch -->
     <!-- <node name="robot_lower_legs_camera_transform" pkg="tf2_ros" type="static_transform_publisher" args="-0.031 -0.000 0.731 -0.423 -0.000 0.906 -0.000 base_link lower_legs_camera_link" />
@@ -45,7 +46,7 @@
         <include unless="$(arg launch_from_bag)" file="$(human_body_detection)/launch/human_body_detection_asus.launch" />
 
         <node pkg="gait_parameters_estimation" name="gait_com_estimation" type="gait_parameters_estimation_com_tracker_node" output="screen">
-            <rosparam command="load" file="$(find gait_parameters_estimation)/include/KalmanFilterParameters.yaml"/>
+            <rosparam command="load" file="$(find gait_parameters_estimation)/config/KalmanFilterParameters.yaml"/>
         </node>
     </group>
 
@@ -55,11 +56,11 @@
     </group>
 
     <!-- GAIT ESTIMATION -->
-    <include unless="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" />
+    <!-- <include unless="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/extract_mobile_robot_base.launch" /> -->
     <!-- <include file="$(find gait_parameters_estimation)/launch/gait_estimation.launch" /> -->
 
     <!-- <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_node.py" output="screen">
-        <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+        <rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
         <param name="use_toe" value="$(arg use_toe)"/>
         <param name="use_leg" value="$(arg use_leg)"/>
         <param name="use_shoulder" value="$(arg use_shoulder)"/>
@@ -67,7 +68,7 @@
     </node> -->
 
     <node pkg="gait_parameters_estimation" name="gait_estimation" type="estimator_toe_refactor.py" output="screen">
-        <rosparam command="load" file="$(find gait_parameters_estimation)/include/config.yaml"/>
+        <rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
         <param name="use_toe" value="$(arg use_toe)"/>
         <param name="use_leg" value="$(arg use_leg)"/>
         <param name="use_shoulder" value="$(arg use_shoulder)"/>

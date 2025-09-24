@@ -9,6 +9,7 @@ from geometry_msgs.msg import PoseArray, PointStamped, TransformStamped, Vector3
 from datetime import datetime
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class EstimatorToeFromBag():
@@ -26,12 +27,8 @@ class EstimatorToeFromBag():
 
         self.tf_buffer, messages = self._read_data_from_bag(bag_file_path, topics)
 
-        print("Names of topics read from bag:")
-        for topic in messages:
-            print("Topic: {}, Number of messages: {}".format(topic, len(messages[topic])))
-
-        toe_data_left = messages["/toe_position/left/kalman"] # type: List[PointStamped]
-        toe_data_right = messages["/toe_position/right/kalman"] # type: List[PointStamped]
+        toe_data_left = messages["/toe_position/left/kalman"] # type: Dict[rospy.Time, PointStamped]
+        toe_data_right = messages["/toe_position/right/kalman"] # type: Dict[rospy.Time, PointStamped]
 
         # --- Analyze Timestamps for each topic ---
         # self._analyze_and_plot_timestamps(toe_data_left, "Left Toe Kalman")
@@ -41,10 +38,12 @@ class EstimatorToeFromBag():
         toe_data_left_in_map_frame = self._transform_to_map_frame(toe_data_left)
         toe_data_right_in_map_frame = self._transform_to_map_frame(toe_data_right)
 
-        self._synchronized_toe_data, unpaired_count = self._synchronize_toe_data(toe_data_left_in_map_frame, toe_data_right_in_map_frame)
+        # --- Plot transformed data series ---
+        self._plot_data_series(toe_data_left_in_map_frame, "Left Toe Position in Map Frame", labels_to_plot=['x', 'y', 'dist'])
+        self._plot_data_series(toe_data_right_in_map_frame, "Right Toe Position in Map Frame", labels_to_plot=['x', 'y', 'dist'])
+        # ------------------------------------
 
-        print("Successfully synchronized %d message pairs." % len(self._synchronized_toe_data))
-        print("%d messages could not be paired and were discarded." % unpaired_count)
+        self._synchronized_toe_data = self._synchronize_toe_data(toe_data_left_in_map_frame, toe_data_right_in_map_frame, slop=0.001)
 
         # self.toe_data = TimeSeriesData(self._fs, self._window_size, self._window_step)
 
@@ -53,110 +52,102 @@ class EstimatorToeFromBag():
 
         # self._data_synced = False
 
-
-    def _synchronize_toe_data(self, left_data, right_data, slop=0.0001):
+    def _synchronize_toe_data(self, left_data, right_data, slop):
         """
-        Synchronizes two lists of messages based on their header timestamps using
-        an approximate time policy.
+        Synchronizes two dictionaries of messages based on their header timestamps
+        using an approximate time policy.
 
         Args:
-            left_data (List[PointStamped]): List of messages for the left toe.
-            right_data (List[PointStamped]): List of messages for the right toe.
+            left_data (Dict[rospy.Time, PointStamped]): Messages for the left toe.
+            right_data (Dict[rospy.Time, PointStamped]): Messages for the right toe.
             slop (float): The maximum time difference (in seconds) allowed for a match.
 
         Returns:
-            tuple(list, int): A tuple containing:
-                - A list of synchronized (left_msg, right_msg) tuples.
-                - The total count of messages that could not be paired.
+            List of synchronized (left_msg, right_msg) tuples.
         """
-        # Ensure data is sorted by timestamp, which is crucial for the algorithm
-        left_data.sort(key=lambda msg: msg.header.stamp)
-        right_data.sort(key=lambda msg: msg.header.stamp)
+        # Get sorted lists of timestamps
+        left_stamps = sorted(left_data.keys())
+        right_stamps = sorted(right_data.keys())
 
         synchronized_pairs = []
         l_idx, r_idx = 0, 0
         used_r_indices = set()
+        slop_duration = rospy.Duration.from_sec(slop)
 
-        # Iterate through each message in the left list
-        for l_msg in left_data:
-            l_stamp = l_msg.header.stamp
-            best_match_r_msg = None
-            min_diff = rospy.Duration.from_sec(slop)
+        while l_idx < len(left_stamps) and r_idx < len(right_stamps):
+            l_stamp = left_stamps[l_idx]
+            best_match_r_stamp = None
+            min_diff = slop_duration
 
             # Search for the best match in the right list
-            # Start search from the last matched index to be efficient
             temp_r_idx = r_idx
-            while temp_r_idx < len(right_data):
-                r_msg = right_data[temp_r_idx]
-                r_stamp = r_msg.header.stamp
+            while temp_r_idx < len(right_stamps):
+                r_stamp = right_stamps[temp_r_idx]
                 diff = abs(l_stamp - r_stamp)
 
-                # If the difference is within our slop and is the best so far
                 if diff <= min_diff:
                     min_diff = diff
-                    best_match_r_msg = r_msg
-                    # Update the starting point for the next left message's search
-                    r_idx = temp_r_idx
+                    best_match_r_stamp = r_stamp
+                    # Tentatively update the starting point for the next search
+                    search_start_r_idx = temp_r_idx
                 
-                # If the right message is much later than the left one, we can stop searching for this l_msg
-                if r_stamp - l_stamp > min_diff:
-                    break
+                if r_stamp - l_stamp > slop_duration:
+                    break # Right stamp is too far ahead, move to next left stamp
                 
                 temp_r_idx += 1
 
-            if best_match_r_msg:
-                # Check if the found best match has already been used
-                if r_idx not in used_r_indices:
-                    synchronized_pairs.append((l_msg, best_match_r_msg))
-                    used_r_indices.add(r_idx)
+            if best_match_r_stamp and search_start_r_idx not in used_r_indices:
+                l_msg = left_data[l_stamp]
+                r_msg = right_data[best_match_r_stamp]
+                synchronized_pairs.append((l_msg, r_msg))
+                used_r_indices.add(search_start_r_idx)
+                r_idx = search_start_r_idx + 1 # Start next search from the next right message
+            
+            l_idx += 1
 
-        # Calculate the number of unpaired messages
-        unpaired_left = len(left_data) - len(synchronized_pairs)
-        unpaired_right = len(right_data) - len(used_r_indices)
-        unpaired_count = unpaired_left + unpaired_right
+        unpaired_count = len(left_data) + len(right_data) - 2 * len(synchronized_pairs)
+        rospy.loginfo("Successfully synchronized %d message pairs." % len(synchronized_pairs))
+        rospy.loginfo("%d messages could not be paired and were discarded." % unpaired_count)
 
-        # The pairs are already chronologically sorted because we iterate through the sorted left_data
-        return synchronized_pairs, unpaired_count
-
+        return synchronized_pairs
+    
     def _read_data_from_bag(self, bag_path, topics_to_read):
         """
         Reads specified topics from a rosbag file.
         It populates a tf2_ros.Buffer with TF messages and collects all other
-        messages into a dictionary.
+        messages into a dictionary mapping timestamps to messages.
         Args:
             bag_path (str): The path to the rosbag file.
             topics_to_read (list): A list of topic names to read.
         Returns:
             tuple(tf2_ros.Buffer, dict): A tuple containing:
                 - The buffer populated with transforms from the bag.
-                - A dictionary where keys are topic names and values are lists of messages.
+                - A dictionary where keys are topic names and values are dictionaries of {timestamp: message}.
         """
         rospy.loginfo("Reading data from bag: %s", bag_path)
         
-        tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(36000))  # 10 hour cache
+        cache_duration = 3600  # 1 hour
+        tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(cache_duration))
         
-        # Initialize a dictionary to hold the messages for each topic
-        populated_messages = {topic: [] for topic in topics_to_read}
-        tf_timestamps_map = []
-        tf_timestamps = []
-        tf_timestamps_static = []
-        tf_timestamps_base = []
+        # Initialize a dictionary to hold dictionaries of {timestamp: message} for each topic
+        populated_messages = {topic: {} for topic in topics_to_read}
 
         try:
             with rosbag.Bag(bag_path, 'r') as bag:
+                # Check if the TF buffer cache is long enough for the entire bag
+                bag_duration_secs = bag.get_end_time() - bag.get_start_time()
+                buffer_cache_secs = cache_duration
+                if bag_duration_secs > buffer_cache_secs:
+                    rospy.logwarn("Bag duration (%.2f s) is greater than TF buffer cache time (%.2f s).", 
+                                  bag_duration_secs, buffer_cache_secs)
+                    rospy.logwarn("This may lead to loss of old transforms and cause lookup errors. "
+                                  "Consider increasing the 'cache_duration' for the tf2_ros.Buffer.")
+
                 # Iterate over all specified topics
                 for topic, msg, t in bag.read_messages(topics=topics_to_read):
                     # Handle TF messages to populate the buffer
                     if topic in ['/tf', '/tf_static']:
                         for transform in msg.transforms:
-                            if (transform.header.frame_id == "map"):
-                                tf_timestamps_map.append(transform.header.stamp.to_sec())
-                            elif (topic == '/tf_static'):
-                                tf_timestamps_static.append(transform.header.stamp.to_sec())
-                            elif (transform.header.frame_id == "base_link"):
-                                tf_timestamps_base.append(transform.header.stamp.to_sec())
-                            else:
-                                tf_timestamps.append(transform.header.stamp.to_sec())
                             is_static = (topic == '/tf_static')
                             try:
                                 if is_static:
@@ -166,56 +157,49 @@ class EstimatorToeFromBag():
                             except tf2_ros.TransformException as ex:
                                 rospy.logwarn("Failed to set transform: %s", ex)
                     
-                    # For all other topics, append the message to the corresponding list
+                    # For all other topics, add the message to the dictionary with its timestamp as the key
                     elif topic in populated_messages:
-                        populated_messages[topic].append(msg)
+                        if hasattr(msg, 'header') and hasattr(msg.header, 'stamp'):
+                            populated_messages[topic][msg.header.stamp] = msg
+                        else:
+                            rospy.logwarn("Message on topic '%s' has no header/stamp, cannot add to dictionary.", topic)
 
         except rosbag.ROSBagException as e:
             rospy.logerr("Error opening or reading bag file: %s", e)
             return None, None
         
-        # --- TF Timestamp Analysis and Visualization ---
-        # This is a special case as TFMessage doesn't have a single header. We use the bag message time 't'.
-        self._analyze_and_plot_timestamps(tf_timestamps, "TF Messages", is_stamped_message=False)
-        self._analyze_and_plot_timestamps(tf_timestamps_map, "TF MAP", is_stamped_message=False)
-        self._analyze_and_plot_timestamps(tf_timestamps_static, "TF Static Messages", is_stamped_message=False)
-        self._analyze_and_plot_timestamps(tf_timestamps_base, "TF BASE_LINK", is_stamped_message=False)
-        # -----------------------------------------
-
         # Clean up the dictionary by removing the TF topics that were handled separately
         populated_messages.pop('/tf', None)
         populated_messages.pop('/tf_static', None)
 
-        rospy.loginfo("Bag data reading complete.")
-        return tf_buffer, populated_messages
+        rospy.loginfo("Bag data reading complete:")
+        for topic in populated_messages:
+            rospy.loginfo("Topic: {}, Number of messages: {}".format(topic, len(populated_messages[topic])))
 
-    def _analyze_and_plot_timestamps(self, data_list, topic_name, is_stamped_message=True):
+        return tf_buffer, populated_messages
+    
+    def _analyze_and_plot_timestamps(self, data_dict, topic_name):
         """
-        Analyzes and plots the distribution of timestamps for a list of messages.
+        Analyzes and plots the distribution of timestamps from a dictionary of messages.
         Args:
-            data_list (list): A list of ROS messages with a .header.stamp, or a list of float timestamps.
+            data_dict (Dict[rospy.Time, PointStamped]): A dictionary of ROS messages.
             topic_name (str): A descriptive name for logging and plotting.
-            is_stamped_message (bool): If True, expects messages with .header.stamp. If False, expects a list of floats.
         """
-        if not data_list:
+        if not data_dict:
             rospy.logwarn("No data found for topic '%s' to analyze.", topic_name)
             return
 
-        if is_stamped_message:
-            timestamps = [msg.header.stamp.to_sec() for msg in data_list]
-        else:
-            timestamps = data_list
+        timestamps = [ts.to_sec() for ts in data_dict.keys()]
 
         earliest_time = min(timestamps)
         latest_time = max(timestamps)
-        duration = latest_time - earliest_time
 
         rospy.loginfo("--- Timestamp Analysis for '%s' ---", topic_name)
         rospy.loginfo("Earliest timestamp: %.4f (%s)", earliest_time, 
                   rospy.Time.from_sec(earliest_time).to_sec().__str__() if hasattr(rospy.Time, 'to_sec') else "")
         rospy.loginfo("Latest timestamp:   %.4f (%s)", latest_time, 
                   rospy.Time.from_sec(latest_time).to_sec().__str__() if hasattr(rospy.Time, 'to_sec') else "")
-        rospy.loginfo("Total duration:     %.4f seconds", duration)
+        rospy.loginfo("Total duration:     %.4f seconds", latest_time - earliest_time)
 
         # Also print ISO format using datetime for clarity
         rospy.loginfo("Earliest ISO: %s", datetime.utcfromtimestamp(earliest_time).isoformat())
@@ -232,90 +216,90 @@ class EstimatorToeFromBag():
         rospy.loginfo("Displaying timestamp distribution plot for '%s'...", topic_name)
         plt.show()
 
-    def _transform_to_map_frame(self, toe_data):
+    def _plot_data_series(self, data_dict, title, labels_to_plot=['x', 'y', 'z']):
         """
-        Transforms a list of PointStamped messages to the target frame.
+        Plots a time series of 3D point data from a dictionary of PointStamped messages.
 
         Args:
-            toe_data (List[PointStamped]): A list of points to transform.
+            data_dict (Dict[rospy.Time, PointStamped]): A dictionary of PointStamped messages.
+            title (str): The title for the plot.
+            labels_to_plot (list): A list of strings specifying which components to plot.
+                                   Options are 'x', 'y', 'z', and 'dist' (for sqrt(x^2+y^2)).
+        """
+        if not data_dict:
+            rospy.logwarn("No data provided for plotting '%s'.", title)
+            return
+
+        # Sort by timestamp to ensure correct plotting order
+        sorted_stamps = sorted(data_dict.keys())
+        data_series = [data_dict[ts] for ts in sorted_stamps]
+
+        timestamps = [ts.to_sec() for ts in sorted_stamps]
+        
+        # Make timestamps relative for a cleaner x-axis
+        start_time = timestamps[0]
+        relative_timestamps = [ts - start_time for ts in timestamps]
+
+        x_vals = np.array([msg.point.x for msg in data_series])
+        y_vals = np.array([msg.point.y for msg in data_series])
+        z_vals = np.array([msg.point.z for msg in data_series])
+
+        plt.figure(figsize=(15, 7))
+
+        if 'x' in labels_to_plot:
+            plt.plot(relative_timestamps, x_vals, label='x')
+        if 'y' in labels_to_plot:
+            plt.plot(relative_timestamps, y_vals, label='y')
+        if 'z' in labels_to_plot:
+            plt.plot(relative_timestamps, z_vals, label='z')
+        if 'dist' in labels_to_plot:
+            dist_vals = -np.sqrt(x_vals**2 + y_vals**2 + z_vals**2)
+            plt.plot(relative_timestamps, dist_vals, label='dist', linestyle='--')
+
+        plt.title(title)
+        plt.xlabel("Time (seconds from start)")
+        plt.ylabel("Position / Distance")
+        plt.legend()
+        plt.grid(True)
+        rospy.loginfo("Displaying plot: '%s'", title)
+        plt.show()
+
+    def _transform_to_map_frame(self, toe_data_dict):
+        """
+        Transforms a dictionary of PointStamped messages to the target frame.
+
+        Args:
+            toe_data_dict (Dict[rospy.Time, PointStamped]): A dictionary of points to transform.
 
         Returns:
-            List[PointStamped]: A new list of transformed points.
+            Dict[rospy.Time, PointStamped]: A new dictionary of transformed points.
         """
-        transformed_points = []
-        if not toe_data:
-            return []
+        transformed_points = {}
+        if not toe_data_dict:
+            return {}
 
-        source_frame = toe_data[0].header.frame_id
+        source_frame = next(iter(toe_data_dict.values())).header.frame_id
 
-        for point_stamped in toe_data:
+        for stamp, point_stamped in toe_data_dict.items():
             try:
                 # Look up the transform at the specific time of the message
                 transform = self.tf_buffer.lookup_transform(
                     'map',
                     source_frame,
-                    point_stamped.header.stamp,
+                    stamp,
                     rospy.Duration(0.1)  # Timeout for the lookup
                 )
                 
                 # Apply the transform
                 point_in_map = tf2_geometry_msgs.do_transform_point(point_stamped, transform)
-                transformed_points.append(point_in_map)
+                transformed_points[point_in_map.header.stamp] = point_in_map
 
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-                # print(transform.header.stamp)
-                print(point_stamped.header.stamp)
-                rospy.logwarn("Could not transform point at time %s: %s", str(point_stamped.header.stamp), e)
+                rospy.logwarn("Could not transform point at time %s: %s", str(stamp), e)
         
-        rospy.loginfo("Transformed %d out of %d points to '%s' frame.", len(transformed_points), len(toe_data), 'map')
+        rospy.loginfo("Transformed %d out of %d points to '%s' frame.", len(transformed_points), len(toe_data_dict), 'map')
         return transformed_points
 
-    def listen_toes(self, data):
-        # type: (PoseArray) -> None
-        with self.toe_data.lock:
-            self.toe_data.data.append(data)
-            self.toe_data.est_fs_and_update(3)
-
-    # def get_window_by_timestamp(self, data, cutoff_time):
-    #     if len(data) == 0:
-    #             return None
-
-    #     with self._toe_lock:
-    #         first_index_in_window = 0
-
-    #         print("BEFORE Length: ", len(data))
-    #         print("BEFORE Time difference: ", data[-1].header.stamp.to_sec() - data[0].header.stamp.to_sec())
-
-    #         # Find the first valid timestamp in ascending order
-    #         while first_index_in_window < len(data) and data[first_index_in_window].header.stamp.to_sec() < cutoff_time:
-    #             first_index_in_window += 1
-
-    #         # Slice from the first valid index to the end
-    #         data = data[first_index_in_window:]
-
-    #         if len(data) == 0:
-    #             return None
-
-    #         window = np.array(data, copy=True)
-    #         print("AFTER Length: ", len(window))
-    #         print("AFTER Time difference: ", window[-1].header.stamp.to_sec() - window[0].header.stamp.to_sec())
-    #         return window
-
-    # This is to compensate for one topic beeing published from bag while others are calculated in real-time
-    def sync_data(self):
-        if self._data_synced:
-            return True
-        if self.toe_data.last_timestamp is 0.0 or self.velocity_data.last_timestamp is 0.0 or self.pose_data.last_timestamp is 0.0:
-            return False
-
-        min_timestamp = min(self.toe_data.last_timestamp, self.velocity_data.last_timestamp, self.pose_data.last_timestamp)
-        self.toe_data.timestamp_offset = self.toe_data.last_timestamp - min_timestamp
-        self.velocity_data.timestamp_offset = self.velocity_data.last_timestamp - min_timestamp
-        self.pose_data.timestamp_offset = self.pose_data.last_timestamp - min_timestamp
-
-        rospy.loginfo("Toe data synced with timestamp offset: %.2f", self.toe_data.timestamp_offset)
-
-        return True
 
     # estimate gait parameters from toe positions
     def gait_estimation(self, timer_event):

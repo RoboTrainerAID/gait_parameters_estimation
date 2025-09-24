@@ -10,8 +10,6 @@
 
     <node pkg="gait_parameters_estimation" name="gait_estimation" type="estimator_toe_from_bag.py" output="screen">
         <rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
-        <!-- <param name="window_size" value="10"/>
-        <param name="window_step" value="1.0"/> -->
     </node>
 
 </launch>

@@ -4,19 +4,16 @@ import rospy
 import rosbag
 import tf2_ros
 import tf2_geometry_msgs
-from tf2_msgs.msg import TFMessage
-from geometry_msgs.msg import PoseArray, PointStamped, TransformStamped, Vector3, Quaternion
-from datetime import datetime
+from geometry_msgs.msg import PointStamped
+import numpy as np
+from scipy import signal
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 class EstimatorToeFromBag():
 
-    def __init__(self):
-
-        bag_file_path = '/home/docker/ros_ws/data/toe_positions.bag'
+    def __init__(self, bag_file_path):
 
         topics = [
             '/tf',
@@ -27,30 +24,81 @@ class EstimatorToeFromBag():
 
         self.tf_buffer, messages = self._read_data_from_bag(bag_file_path, topics)
 
-        toe_data_left = messages["/toe_position/left/kalman"] # type: Dict[rospy.Time, PointStamped]
-        toe_data_right = messages["/toe_position/right/kalman"] # type: Dict[rospy.Time, PointStamped]
+        # --- Extract msgs from bag ---
+        toe_left_msg = messages["/toe_position/left/kalman"] # type: Dict[float, PointStamped]
+        toe_right_msg = messages["/toe_position/right/kalman"] # type: Dict[float, PointStamped]
 
-        # --- Analyze Timestamps for each topic ---
-        # self._analyze_and_plot_timestamps(toe_data_left, "Left Toe Kalman")
-        # self._analyze_and_plot_timestamps(toe_data_right, "Right Toe Kalman")
-        # -----------------------------------------
+        # --- Filter the data to remove jitter ---
+        toe_left_msg_filtered = self._smooth_and_filter_data(toe_left_msg, cutoff=2.0, order=4)
+        toe_right_msg_filtered = self._smooth_and_filter_data(toe_right_msg, cutoff=2.0, order=4)
 
-        toe_data_left_in_map_frame = self._transform_to_map_frame(toe_data_left)
-        toe_data_right_in_map_frame = self._transform_to_map_frame(toe_data_right)
+        # --- Transform to 'map' frame ---
+        toe_left_msg_map_frame = self._transform_to_map_frame(toe_left_msg_filtered)
+        toe_right_msg_map_frame = self._transform_to_map_frame(toe_right_msg_filtered)
+        # synchronized_toe_data = self._synchronize_toe_data(toe_left_msg_map_frame, toe_right_msg_map_frame, slop=0.001)
 
-        # --- Plot transformed data series ---
-        self._plot_data_series(toe_data_left_in_map_frame, "Left Toe Position in Map Frame", labels_to_plot=['x', 'y', 'dist'])
-        self._plot_data_series(toe_data_right_in_map_frame, "Right Toe Position in Map Frame", labels_to_plot=['x', 'y', 'dist'])
-        # ------------------------------------
+        # --- Calculate normalized toe distance from dict ---
+        left_t, left_dist = self._get_normalized_distance(toe_left_msg_filtered)
+        right_t, right_dist = self._get_normalized_distance(toe_right_msg_filtered)
 
-        self._synchronized_toe_data = self._synchronize_toe_data(toe_data_left_in_map_frame, toe_data_right_in_map_frame, slop=0.001)
+        # --- Calculate gait parameters ---
+        param_dict = self.gait_parameters(left_t, left_dist, right_t, right_dist, toe_left_msg_map_frame, toe_right_msg_map_frame)
+        filtered_param_dict = {k: v for k, v in param_dict.items() if 'raw' not in k}
+        rospy.loginfo("Estimated Gait Parameters: %s", filtered_param_dict)
+        
+        # --- Plot comparison ---
+        original_left_t, original_left_dist = self._get_normalized_distance(toe_left_msg)
+        original_right_t, original_right_dist = self._get_normalized_distance(toe_right_msg)
 
-        # self.toe_data = TimeSeriesData(self._fs, self._window_size, self._window_step)
+        plot_lines = {
+            # 'left_dist': (left_t, left_dist),
+            # 'right_dist': (right_t, right_dist),
+            'original_left': (original_left_t, original_left_dist),
+            'original_right': (original_right_t, original_right_dist),
+            # 'left_pos_map': (np.array(sorted(toe_left_msg_map_frame.keys())), np.array([toe_left_msg_map_frame[ts].point.x for ts in sorted(toe_left_msg_map_frame.keys())])),
+            # 'right_pos_map': (np.array(sorted(toe_right_msg_map_frame.keys())), np.array([toe_right_msg_map_frame[ts].point.x for ts in sorted(toe_right_msg_map_frame.keys())])),
+            '/left/stride': (np.array(param_dict['/left/stride/raw']['stride_timestamp']), np.array(param_dict['/left/stride/raw']['stride_length'])),
+            '/right/stride': (np.array(param_dict['/right/stride/raw']['stride_timestamp']), np.array(param_dict['/right/stride/raw']['stride_length'])),
 
-        # self._toe_lock = Lock()
-        # self._sub_toes = rospy.Subscriber("/toe_detection/toe_positions", PoseArray, self.listen_toes)
+        }
+        plot_points = {
+        }
 
-        # self._data_synced = False
+        self._plot_data(plot_lines, plot_points)
+
+
+    def _plot_data(self, plot_lines={}, plot_points={}):
+        """
+        Plots an arbitrary number of data series on a single graph using timestamps.
+
+        Args:
+            plot_lines (dict): A dictionary where keys are labels and values are (timestamps, data) tuples to be plotted as lines.
+            plot_points (dict): A dictionary where keys are labels and values are (timestamps, data) tuples to be plotted as scatter points.
+        """
+        plt.figure(figsize=(15, 7))
+
+        # Plot all line series
+        for label, (timestamps, data) in plot_lines.items():
+            if data.size > 0 and timestamps.size == data.size:
+                plt.plot(timestamps, data, label=label, alpha=0.8)
+            else:
+                rospy.logwarn("Skipping plot for line '%s': data/timestamp size mismatch or empty.", label)
+
+        # Plot all point series
+        for label, (timestamps, data) in plot_points.items():
+            if data.size > 0 and timestamps.size == data.size:
+                plt.scatter(timestamps, data, label=label, s=10) # s for marker size
+            else:
+                rospy.logwarn("Skipping plot for points '%s': data/timestamp size mismatch or empty.", label)
+                print('sizes:', timestamps.size, data.size)
+
+        plt.title("Data Series Comparison")
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Value (e.g., Distance)")
+        plt.legend()
+        plt.grid(True, linestyle='--', alpha=0.6)
+        rospy.loginfo("Displaying combined data plot...")
+        plt.show()
 
     def _synchronize_toe_data(self, left_data, right_data, slop):
         """
@@ -58,28 +106,25 @@ class EstimatorToeFromBag():
         using an approximate time policy.
 
         Args:
-            left_data (Dict[rospy.Time, PointStamped]): Messages for the left toe.
-            right_data (Dict[rospy.Time, PointStamped]): Messages for the right toe.
+            left_data (Dict[float, PointStamped]): Messages for the left toe with float timestamps.
+            right_data (Dict[float, PointStamped]): Messages for the right toe with float timestamps.
             slop (float): The maximum time difference (in seconds) allowed for a match.
 
         Returns:
             List of synchronized (left_msg, right_msg) tuples.
         """
-        # Get sorted lists of timestamps
         left_stamps = sorted(left_data.keys())
         right_stamps = sorted(right_data.keys())
 
         synchronized_pairs = []
         l_idx, r_idx = 0, 0
         used_r_indices = set()
-        slop_duration = rospy.Duration.from_sec(slop)
 
         while l_idx < len(left_stamps) and r_idx < len(right_stamps):
             l_stamp = left_stamps[l_idx]
             best_match_r_stamp = None
-            min_diff = slop_duration
+            min_diff = slop
 
-            # Search for the best match in the right list
             temp_r_idx = r_idx
             while temp_r_idx < len(right_stamps):
                 r_stamp = right_stamps[temp_r_idx]
@@ -88,20 +133,19 @@ class EstimatorToeFromBag():
                 if diff <= min_diff:
                     min_diff = diff
                     best_match_r_stamp = r_stamp
-                    # Tentatively update the starting point for the next search
                     search_start_r_idx = temp_r_idx
                 
-                if r_stamp - l_stamp > slop_duration:
-                    break # Right stamp is too far ahead, move to next left stamp
+                if r_stamp - l_stamp > slop:
+                    break
                 
                 temp_r_idx += 1
 
-            if best_match_r_stamp and search_start_r_idx not in used_r_indices:
+            if best_match_r_stamp is not None and search_start_r_idx not in used_r_indices:
                 l_msg = left_data[l_stamp]
                 r_msg = right_data[best_match_r_stamp]
                 synchronized_pairs.append((l_msg, r_msg))
                 used_r_indices.add(search_start_r_idx)
-                r_idx = search_start_r_idx + 1 # Start next search from the next right message
+                r_idx = search_start_r_idx + 1
             
             l_idx += 1
 
@@ -111,6 +155,69 @@ class EstimatorToeFromBag():
 
         return synchronized_pairs
     
+    def _smooth_and_filter_data(self, data_dict, cutoff, order=4):
+        """
+        Applies a two-stage filter: Savitzky-Golay for smoothing followed by a
+        low-pass Butterworth filter for removing jitter.
+
+        Args:
+            data_dict (Dict[float, PointStamped]): A dictionary of PointStamped messages.
+            cutoff (float): The cutoff frequency for the Butterworth filter in Hz.
+            order (int): The order of the Butterworth filter.
+
+        Returns:
+            Dict[rospy.Time, PointStamped]: A new dictionary with the filtered data.
+        """
+        if len(data_dict) < 20:
+            rospy.logwarn("Not enough data points to filter, returning original data.")
+            return data_dict
+
+        # --- Extract Data ---
+        sorted_stamps = sorted(data_dict.keys())
+        data_series = [data_dict[ts] for ts in sorted_stamps]
+        x_vals = np.array([msg.point.x for msg in data_series])
+        y_vals = np.array([msg.point.y for msg in data_series])
+        z_vals = np.array([msg.point.z for msg in data_series])
+        # --------------------
+
+        # --- Stage 1: Savitzky-Golay Smoothing ---
+        # This filter smooths data by fitting a polynomial to a window of points.
+        # It's good at preserving peak shape and height.
+        # `window_length`: Number of points for the fit. Must be an odd integer.
+        # `polyorder`: Order of the polynomial. Must be less than window_length.
+        savgol_window = 11  # Must be odd
+        savgol_poly = 3
+        if len(x_vals) > savgol_window:
+            x_vals = signal.savgol_filter(x_vals, savgol_window, savgol_poly)
+            y_vals = signal.savgol_filter(y_vals, savgol_window, savgol_poly)
+            z_vals = signal.savgol_filter(z_vals, savgol_window, savgol_poly)
+
+        # --- Stage 2: Butterworth Low-pass Filter ---
+        fs = 1.0 / np.mean(np.diff(sorted_stamps))
+        rospy.loginfo("Estimated sampling frequency: %.2f Hz", fs)
+
+        # Design Filter
+        nyq = 0.5 * fs
+        normal_cutoff = cutoff / nyq
+        b, a = signal.butter(order, normal_cutoff, btype='low', analog=False)
+
+        # Apply a zero-phase filter (filtfilt) to each axis
+        x_filtered = signal.filtfilt(b, a, x_vals)
+        y_filtered = signal.filtfilt(b, a, y_vals)
+        z_filtered = signal.filtfilt(b, a, z_vals)
+
+        # --- Reconstruct Data ---
+        filtered_dict = {}
+        for i, stamp_sec in enumerate(sorted_stamps):
+            new_msg = PointStamped()
+            new_msg.header = data_dict[stamp_sec].header
+            new_msg.point.x = x_filtered[i]
+            new_msg.point.y = y_filtered[i]
+            new_msg.point.z = z_filtered[i]
+            filtered_dict[stamp_sec] = new_msg
+        
+        return filtered_dict
+
     def _read_data_from_bag(self, bag_path, topics_to_read):
         """
         Reads specified topics from a rosbag file.
@@ -126,26 +233,23 @@ class EstimatorToeFromBag():
         """
         rospy.loginfo("Reading data from bag: %s", bag_path)
         
-        cache_duration = 3600  # 1 hour
+        cache_duration = 3600
         tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(cache_duration))
         
-        # Initialize a dictionary to hold dictionaries of {timestamp: message} for each topic
         populated_messages = {topic: {} for topic in topics_to_read}
 
         try:
             with rosbag.Bag(bag_path, 'r') as bag:
                 # Check if the TF buffer cache is long enough for the entire bag
                 bag_duration_secs = bag.get_end_time() - bag.get_start_time()
-                buffer_cache_secs = cache_duration
-                if bag_duration_secs > buffer_cache_secs:
+                if bag_duration_secs > cache_duration:
                     rospy.logwarn("Bag duration (%.2f s) is greater than TF buffer cache time (%.2f s).", 
-                                  bag_duration_secs, buffer_cache_secs)
+                                  bag_duration_secs, cache_duration)
                     rospy.logwarn("This may lead to loss of old transforms and cause lookup errors. "
                                   "Consider increasing the 'cache_duration' for the tf2_ros.Buffer.")
 
                 # Iterate over all specified topics
                 for topic, msg, t in bag.read_messages(topics=topics_to_read):
-                    # Handle TF messages to populate the buffer
                     if topic in ['/tf', '/tf_static']:
                         for transform in msg.transforms:
                             is_static = (topic == '/tf_static')
@@ -157,122 +261,34 @@ class EstimatorToeFromBag():
                             except tf2_ros.TransformException as ex:
                                 rospy.logwarn("Failed to set transform: %s", ex)
                     
-                    # For all other topics, add the message to the dictionary with its timestamp as the key
                     elif topic in populated_messages:
                         if hasattr(msg, 'header') and hasattr(msg.header, 'stamp'):
-                            populated_messages[topic][msg.header.stamp] = msg
+                            populated_messages[topic][msg.header.stamp.to_sec()] = msg
                         else:
-                            rospy.logwarn("Message on topic '%s' has no header/stamp, cannot add to dictionary.", topic)
+                            rospy.logwarn("Msg on topic '%s' has no header/stamp.", topic)
 
         except rosbag.ROSBagException as e:
-            rospy.logerr("Error opening or reading bag file: %s", e)
+            rospy.logerr("Error reading bag file: %s", e)
             return None, None
         
-        # Clean up the dictionary by removing the TF topics that were handled separately
         populated_messages.pop('/tf', None)
         populated_messages.pop('/tf_static', None)
 
-        rospy.loginfo("Bag data reading complete:")
-        for topic in populated_messages:
-            rospy.loginfo("Topic: {}, Number of messages: {}".format(topic, len(populated_messages[topic])))
+        rospy.loginfo("Bag data reading complete.")
+        for topic, messages in populated_messages.items():
+            rospy.loginfo("Topic: %s, Number of messages: %d", topic, len(messages))
 
         return tf_buffer, populated_messages
-    
-    def _analyze_and_plot_timestamps(self, data_dict, topic_name):
-        """
-        Analyzes and plots the distribution of timestamps from a dictionary of messages.
-        Args:
-            data_dict (Dict[rospy.Time, PointStamped]): A dictionary of ROS messages.
-            topic_name (str): A descriptive name for logging and plotting.
-        """
-        if not data_dict:
-            rospy.logwarn("No data found for topic '%s' to analyze.", topic_name)
-            return
-
-        timestamps = [ts.to_sec() for ts in data_dict.keys()]
-
-        earliest_time = min(timestamps)
-        latest_time = max(timestamps)
-
-        rospy.loginfo("--- Timestamp Analysis for '%s' ---", topic_name)
-        rospy.loginfo("Earliest timestamp: %.4f (%s)", earliest_time, 
-                  rospy.Time.from_sec(earliest_time).to_sec().__str__() if hasattr(rospy.Time, 'to_sec') else "")
-        rospy.loginfo("Latest timestamp:   %.4f (%s)", latest_time, 
-                  rospy.Time.from_sec(latest_time).to_sec().__str__() if hasattr(rospy.Time, 'to_sec') else "")
-        rospy.loginfo("Total duration:     %.4f seconds", latest_time - earliest_time)
-
-        # Also print ISO format using datetime for clarity
-        rospy.loginfo("Earliest ISO: %s", datetime.utcfromtimestamp(earliest_time).isoformat())
-        rospy.loginfo("Latest ISO:   %s", datetime.utcfromtimestamp(latest_time).isoformat())
-
-        # Plot the distribution
-        plt.figure(figsize=(12, 6))
-        relative_timestamps = [ts - earliest_time for ts in timestamps]
-        plt.hist(relative_timestamps, bins=100, color='royalblue', alpha=0.8)
-        plt.title('Distribution of Timestamps for %s' % topic_name)
-        plt.xlabel('Time (seconds from first message)')
-        plt.ylabel('Number of Messages per Bin')
-        plt.grid(True, linestyle='--', alpha=0.6)
-        rospy.loginfo("Displaying timestamp distribution plot for '%s'...", topic_name)
-        plt.show()
-
-    def _plot_data_series(self, data_dict, title, labels_to_plot=['x', 'y', 'z']):
-        """
-        Plots a time series of 3D point data from a dictionary of PointStamped messages.
-
-        Args:
-            data_dict (Dict[rospy.Time, PointStamped]): A dictionary of PointStamped messages.
-            title (str): The title for the plot.
-            labels_to_plot (list): A list of strings specifying which components to plot.
-                                   Options are 'x', 'y', 'z', and 'dist' (for sqrt(x^2+y^2)).
-        """
-        if not data_dict:
-            rospy.logwarn("No data provided for plotting '%s'.", title)
-            return
-
-        # Sort by timestamp to ensure correct plotting order
-        sorted_stamps = sorted(data_dict.keys())
-        data_series = [data_dict[ts] for ts in sorted_stamps]
-
-        timestamps = [ts.to_sec() for ts in sorted_stamps]
-        
-        # Make timestamps relative for a cleaner x-axis
-        start_time = timestamps[0]
-        relative_timestamps = [ts - start_time for ts in timestamps]
-
-        x_vals = np.array([msg.point.x for msg in data_series])
-        y_vals = np.array([msg.point.y for msg in data_series])
-        z_vals = np.array([msg.point.z for msg in data_series])
-
-        plt.figure(figsize=(15, 7))
-
-        if 'x' in labels_to_plot:
-            plt.plot(relative_timestamps, x_vals, label='x')
-        if 'y' in labels_to_plot:
-            plt.plot(relative_timestamps, y_vals, label='y')
-        if 'z' in labels_to_plot:
-            plt.plot(relative_timestamps, z_vals, label='z')
-        if 'dist' in labels_to_plot:
-            dist_vals = -np.sqrt(x_vals**2 + y_vals**2 + z_vals**2)
-            plt.plot(relative_timestamps, dist_vals, label='dist', linestyle='--')
-
-        plt.title(title)
-        plt.xlabel("Time (seconds from start)")
-        plt.ylabel("Position / Distance")
-        plt.legend()
-        plt.grid(True)
-        rospy.loginfo("Displaying plot: '%s'", title)
-        plt.show()
 
     def _transform_to_map_frame(self, toe_data_dict):
         """
         Transforms a dictionary of PointStamped messages to the target frame.
 
         Args:
-            toe_data_dict (Dict[rospy.Time, PointStamped]): A dictionary of points to transform.
+            toe_data_dict (Dict[float, PointStamped]): A dictionary of points to transform.
 
         Returns:
-            Dict[rospy.Time, PointStamped]: A new dictionary of transformed points.
+            Dict[float, PointStamped]: A new dictionary of transformed points.
         """
         transformed_points = {}
         if not toe_data_dict:
@@ -280,420 +296,195 @@ class EstimatorToeFromBag():
 
         source_frame = next(iter(toe_data_dict.values())).header.frame_id
 
-        for stamp, point_stamped in toe_data_dict.items():
+        for stamp_sec, point_stamped in toe_data_dict.items():
             try:
-                # Look up the transform at the specific time of the message
                 transform = self.tf_buffer.lookup_transform(
                     'map',
                     source_frame,
-                    stamp,
-                    rospy.Duration(0.1)  # Timeout for the lookup
+                    rospy.Time.from_sec(stamp_sec),
+                    rospy.Duration(0.1)
                 )
-                
-                # Apply the transform
                 point_in_map = tf2_geometry_msgs.do_transform_point(point_stamped, transform)
-                transformed_points[point_in_map.header.stamp] = point_in_map
+                transformed_points[point_in_map.header.stamp.to_sec()] = point_in_map
 
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-                rospy.logwarn("Could not transform point at time %s: %s", str(stamp), e)
+                rospy.logwarn("Could not transform point at time %s: %s", str(stamp_sec), e)
         
-        rospy.loginfo("Transformed %d out of %d points to '%s' frame.", len(transformed_points), len(toe_data_dict), 'map')
+        rospy.loginfo("Transformed %d out of %d points to 'map' frame.", len(transformed_points), len(toe_data_dict))
         return transformed_points
 
+    def _get_normalized_distance(self, data_dict):
+        """
+        Calculates the normalized Euclidean distance for a dictionary of PointStamped messages.
 
-    # estimate gait parameters from toe positions
-    def gait_estimation(self, timer_event):
+        Args:
+            data_dict (Dict[float, PointStamped]): A dictionary of messages.
 
-        start_time = rospy.Time.now().to_sec()
+        Returns:
+            tuple(np.array, np.array): A tuple containing:
+                - An array of timestamps in seconds.
+                - An array of corresponding normalized distances.
+        """
+        if not data_dict:
+            return np.array([]), np.array([])
 
-        # print("TOE DATA")
-        # print("Length toe data: ", len(self.toe_data.data))
-        window_toe = self.toe_data.get_window_by_fs()
-        # print("VEL DATA")
-        # print("Length vel data: ", len(self.velocity_data.data))
-        window_vel = self.velocity_data.get_window_by_fs()
-        # print("POSE DATA")
-        # print("Length pose data: ", len(self.pose_data.data))
-        window_poses = self.pose_data.get_window_by_fs()
-        self._window_poses = window_poses  # for campatibility with EstimatorBase
+        sorted_stamps = sorted(data_dict.keys())
+        
+        distances = np.array([
+            np.sqrt(data_dict[ts].point.x**2 + data_dict[ts].point.y**2 + data_dict[ts].point.z**2)
+            for ts in sorted_stamps
+        ])
+        
+        return np.array(sorted_stamps), distances
+    
+    def gait_parameters(self, left_t, left_dist, right_t, right_dist, toe_left_msg_map_frame, toe_right_msg_map_frame):
+        """
+        Calculates gait parameters by finding peaks and valleys in the distance data.
+        """
+        if len(left_t) < 2:
+            rospy.logwarn("Not enough data to perform gait analysis.")
+            return {}
 
-        if window_toe is None or window_poses is None or window_vel is None:
-            rospy.logwarn("No valid data in window, skipping gait estimation.")
-            self._data_synced = False
-            return
+        # --- Estimate Sampling Frequency from Timestamps ---
+        fs = 1.0 / np.mean(np.diff(left_t))
+        rospy.loginfo("Gait analysis using estimated sampling frequency: %.2f Hz", fs)
 
-        self._data_synced = self.sync_data()
+        # --- Peak Detection Parameters ---
+        # `prominence`: Required prominence of a peak. Measures how much a peak stands out from its surroundings.
+        #             This is often more robust than a fixed height threshold.
+        # `min_peak_distance_sec`: The minimum expected time between consecutive steps.
+        peak_prominence = 0.025  # Adjust based on expected peak shape and noise level
+        min_peak_distance_sec = 0.4  # Corresponds to a max cadence of 150 steps/min
+        peak_distance = int(min_peak_distance_sec * fs)
+        # print("Using peak prominence: {:.3f} and minimum peak distance: {} samples ({:.2f} sec)".format(
+        #     peak_prominence, peak_distance, min_peak_distance_sec))
 
-        avg_window_vel = self.get_avg_speed(window_vel)
+        # TODO: (Andreas) This is only valid for RoboTrainer moving forward in +x direction, when moving backwards the peak valley mapping to TO/HS is inverted
+        left_to_idx, _ = signal.find_peaks(left_dist, distance=peak_distance, prominence=peak_prominence)
+        left_hs_idx, _ = signal.find_peaks(-left_dist, distance=peak_distance, prominence=peak_prominence)
+        right_to_idx, _ = signal.find_peaks(right_dist, distance=peak_distance, prominence=peak_prominence)
+        right_hs_idx, _ = signal.find_peaks(-right_dist, distance=peak_distance, prominence=peak_prominence)
 
-        toe_fs = self.toe_data.est_fs(window_toe, len(window_toe))
-        print("Toe fs: ", toe_fs)
-        print("self.toe_data.fs: ", self.toe_data.fs)
+        rospy.loginfo("Detected %d left peaks and %d left valleys.", len(left_to_idx), len(left_hs_idx))
+        rospy.loginfo("Detected %d right peaks and %d right valleys.", len(right_to_idx), len(right_hs_idx))
 
-        print(avg_window_vel)
+        # --- Calculate Stride Parameters ---
+        left_strides = self.calculate_strides(toe_left_msg_map_frame, left_t, left_hs_idx, left_to_idx)
+        right_strides = self.calculate_strides(toe_right_msg_map_frame, right_t, right_hs_idx, right_to_idx)
 
-        time_stamps = []
-        left_sumsq = []
-        right_sumsq = []
+        avg_param_dict = {}
 
-        for toe_msg in window_toe:
-            time_stamps.append(toe_msg.header.stamp.to_sec())
-            left_sumsq.append(toe_msg.poses[0].position.x ** 2 + toe_msg.poses[0].position.y ** 2)
-            right_sumsq.append(toe_msg.poses[1].position.x ** 2 + toe_msg.poses[1].position.y ** 2)
+        if not left_strides['stride_length'] or not right_strides['stride_length']:
+            rospy.logwarn("No valid strides detected for one or both feet. Cannot compute average gait parameters.")
+            return avg_param_dict
+        
+        avg_param_dict['/left/stride_length/avg'] = np.mean(left_strides['stride_length'])
+        avg_param_dict['/left/stride_duration/avg'] = np.mean(left_strides['stride_duration'])
+        avg_param_dict['/left/swing_time/avg'] = np.mean(left_strides['swing_time'])
+        avg_param_dict['/left/stance_time/avg'] = np.mean(left_strides['stance_time'])
+        avg_param_dict['/left/num_strides'] = len(left_strides['stride_length'])
+        avg_param_dict['/left/stride/raw'] = left_strides
+        
+        avg_param_dict['/right/stride_length/avg'] = np.mean(right_strides['stride_length'])
+        avg_param_dict['/right/stride_duration/avg'] = np.mean(right_strides['stride_duration'])
+        avg_param_dict['/right/swing_time/avg'] = np.mean(right_strides['swing_time'])
+        avg_param_dict['/right/stance_time/avg'] = np.mean(right_strides['stance_time'])
+        avg_param_dict['/right/num_strides'] = len(right_strides['stride_length'])
+        avg_param_dict['/right/stride/raw'] = right_strides
 
-        left_toe_norm = np.sqrt(left_sumsq)
-        right_toe_norm = np.sqrt(right_sumsq)
+        # Cadence (steps/min) = 60 / (left_stride_durations + right_stride_durations) / 2
+        avg_stride_duration = (avg_param_dict['/left/stride_duration/avg'] + avg_param_dict['/right/stride_duration/avg']) / 2.0
+        avg_param_dict['/cadence/avg'] = 60.0 / avg_stride_duration
 
-        params = gp()
-        params.header.stamp = window_toe[-1].header.stamp
+        # Speed (m/s) = avg_stride_length / avg_stride_duration
+        avg_stride_length = (avg_param_dict['/left/stride_length/avg'] + avg_param_dict['/right/stride_length/avg']) / 2.0
+        avg_param_dict['/speed/avg'] = avg_stride_length / avg_stride_duration
 
-        debug_plt = []
-        plt_ind = []
-        debugs = []
+        # plot_lines = {
+        #     'left_dist': (left_t, left_dist),
+        #     'right_dist': (right_t, right_dist),
+        # }
+        # plot_points = {
+        #     'left_to': (left_t[left_to_idx], left_dist[left_to_idx]),
+        #     'left_hs': (left_t[left_hs_idx], left_dist[left_hs_idx]),
+        #     'right_to': (right_t[right_to_idx], right_dist[right_to_idx]),
+        #     'right_hs': (right_t[right_hs_idx], right_dist[right_hs_idx]),
+        # }
 
-        # #check if robot moved by velocity, if under threshold set cadence to zero
-        # if all(s < 0.2 for s in avg_window_vel):
-        #     params.cadence = 0.0
-        #     params.cadence_avg = 0.0
-        # else:
-        #     cad, cad_avg, debugs = self._wflc.wflc(td_bandpassed, self._fs, t = time_stamps)
-        #     params.cadence = cad
-        #     params.cadence_avg = cad_avg
+        # self._plot_data(plot_lines, plot_points)
 
-        # print("cadence: ", params.cadence)
-        # print("cadence_avg: ", params.cadence_avg)
+        return avg_param_dict
 
-        leg1_param = leg_params()
-        leg2_param = leg_params()
+    def calculate_strides(self, position_data, timestamps, toe_off_indices, heel_strike_indices):
+        """
+        Calculates stride parameters based on heel-strike and toe-off events.
 
-        min_peak_dist = toe_fs * (1.0 / self._highcut) * 2
-        pkwidth = toe_fs * (0.1 / self._highcut) if toe_fs * (0.1 / self._highcut) > 1.0 else 1.0
+        A stride is defined from one heel-strike to the next of the same foot.
+        It is composed of a stance phase (HS to TO) and a swing phase (TO to next HS).
 
-        print("min_peak_dist: ", min_peak_dist)
-        print("pkwidth: ", pkwidth)
+        Args:
+            position_data (Dict[float, PointStamped]): Dictionary of toe positions in the map frame.
+            timestamps (np.array): Array of timestamps (in seconds) corresponding to the data used for peak detection.
+            toe_off_indices (list): List of array indices for toe-off events (valleys).
+            heel_strike_indices (list): List of array indices for heel-strike events (peaks).
 
-        if min_peak_dist < 1.0:
-            # signal.find_peaks requires a minimum distance of 1.0
-            rospy.logerr("min_peak_dist is < 1, return estimator_toe method")
-            return
+        Returns:
+            dict: A dictionary containing lists of 'stride_length', 'stride_duration',
+                  'swing_time', 'stance_time', and 'stride_timestamp' for all detected strides.
+        """
+        strides_dict = {
+            'stride_length': [],
+            'stride_duration': [],
+            'swing_time': [],
+            'stance_time': [],
+            'stride_timestamp': []
+        }
+        if len(heel_strike_indices) < 2:
+            rospy.logwarn("Not enough heel-strike events to calculate strides.")
+            return strides_dict
 
-        peak_indexes_l1, _ = signal.find_peaks(left_toe_norm, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-        valley_indexes_l1, _ = signal.find_peaks(-left_toe_norm, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-        peak_indexes_l2, _ = signal.find_peaks(right_toe_norm, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-        valley_indexes_l2, _ = signal.find_peaks(-right_toe_norm, distance=min_peak_dist, prominence=0.025, width=pkwidth)
+        # Iterate through consecutive heel-strikes to define each stride
+        for i in range(len(heel_strike_indices) - 1):
+            hs1_idx = heel_strike_indices[i]
+            hs2_idx = heel_strike_indices[i+1]
 
-        # only for debugging
-        # self.visualize(time_stamps, left_toe_norm, right_toe_norm, peak_indexes_l1, valley_indexes_l1, peak_indexes_l2, valley_indexes_l2)
+            # Find the toe-off that occurs between these two heel-strikes
+            to_indices_within_stride = [to_idx for to_idx in toe_off_indices if hs1_idx < to_idx < hs2_idx]
+            if not to_indices_within_stride:
+                continue # Not a valid stride if no toe-off occurs
 
-        if avg_window_vel[0] == max(avg_window_vel):
-            if avg_window_vel[0] >= 0:
-                to_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
-                hs_l1_t = np.array([time_stamps[v] for v in valley_indexes_l1])
+            to_idx = to_indices_within_stride[0]
 
-                to_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
-                hs_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
+            hs1_time_sec = timestamps[hs1_idx]
+            hs2_time_sec = timestamps[hs2_idx]
+            to_time_sec = timestamps[to_idx]
+
+            # --- Calculate Durations ---
+            stride_duration = hs2_time_sec - hs1_time_sec
+            stance_time = to_time_sec - hs1_time_sec
+            swing_time = hs2_time_sec - to_time_sec
+
+            # --- Calculate Stride Length ---
+            # Look up the 3D positions using the timestamps as keys
+            if hs1_time_sec in position_data and hs2_time_sec in position_data:
+                p_hs1 = position_data[hs1_time_sec].point
+                p_hs2 = position_data[hs2_time_sec].point
+                stride_length = np.sqrt((p_hs2.x - p_hs1.x)**2 + (p_hs2.y - p_hs1.y)**2 + (p_hs2.z - p_hs1.z)**2)
+
+                if stride_duration > 0 and stride_length > 0:
+                    strides_dict['stride_length'].append(stride_length)
+                    strides_dict['stride_duration'].append(stride_duration)
+                    strides_dict['swing_time'].append(swing_time)
+                    strides_dict['stance_time'].append(stance_time)
+                    strides_dict['stride_timestamp'].append(hs2_time_sec)
             else:
-                to_l1_t = np.array([time_stamps[v] for v in valley_indexes_l1])
-                hs_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
+                rospy.logwarn("Could not find position data for a stride event timestamp. Skipping stride.")
 
-                to_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
-                hs_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
-        else:
-            if avg_window_vel[1] >= 0:
-                to_l1_t = np.array([time_stamps[v] for v in valley_indexes_l1])
-                hs_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
-
-                to_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
-                hs_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
-            else:
-                to_l1_t = np.array([time_stamps[v] for v in valley_indexes_l1])
-                hs_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
-
-                to_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
-                hs_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
-
-        # pose_at_heelstrike_left = self.get_mobile_robot_pose_at_time(window_poses, valley_indexes_l1)
-        # pose_at_heelstrike_right = self.get_mobile_robot_pose_at_time(window_poses, valley_indexes_l2)
-
-        # get mobile robot pose at the timestamp of the heel strikes
-        # def get_mobile_robot_pose_at_time(self, poses, indexes):
-        # type: (NDArray[float], List[int]) -> List
-
-        # get toe data at valley indixes
-        toe_at_heelstrike_left = window_toe[peak_indexes_l1]
-        toe_at_heelstrike_right = window_toe[peak_indexes_l2]
-
-        left_heelstrike_in_map_frame = self.calculate_toe_in_map_frame(window_poses, toe_at_heelstrike_left, left=True)
-        right_heelstrike_in_map_frame = self.calculate_toe_in_map_frame(window_poses, toe_at_heelstrike_right, left=False)
-
-        if not left_heelstrike_in_map_frame is None:
-            print("Number of left heelstrikes in window: ", len(left_heelstrike_in_map_frame))
-            for toe in left_heelstrike_in_map_frame:
-                left_toe_heelstrike_in_map.publish(toe)
-
-        if not right_heelstrike_in_map_frame is None:
-            print("Number of right heelstrikes in window: ", len(right_heelstrike_in_map_frame))
-            for toe in right_heelstrike_in_map_frame:
-                right_toe_heelstrike_in_map.publish(toe)
-
-        # TODO: (Andreas) calculate step length as distance between heel strikes of left and right toe
-        # 1. Get main movement axis between last two heelstrikes of one foot
-        # 2. Project point of other foot heelstrike onto that axis
-        # 2. calculate distance of one heelstrike to heelstrike of other foot only along this axis
-
-        leg1_param.cadence = self.cadence_leg(time_stamps, hs_l1_t, to_l1_t)
-        leg2_param.cadence = self.cadence_leg(time_stamps, hs_l2_t, to_l2_t)
-
-        hs_l1_ind = [time_stamps.index(hs1) for hs1 in hs_l1_t]
-        hs_l2_ind = [time_stamps.index(hs2) for hs2 in hs_l2_t]
-        to_l1_ind = [time_stamps.index(to1) for to1 in to_l1_t]
-        to_l2_ind = [time_stamps.index(to2) for to2 in to_l2_t]
-
-        leg1_param.stride_length, leg1_param.swing_time = self.stride_length(time_stamps, left_toe_norm, hs_l1_ind, to_l1_ind)
-        leg2_param.stride_length, leg2_param.swing_time = self.stride_length(time_stamps, right_toe_norm, hs_l2_ind, to_l2_ind)
-
-        leg1_param.stride_intervall = self.stride_time(to_l1_t)
-        leg2_param.stride_intervall = self.stride_time(to_l2_t)
-
-        if leg1_param.stride_intervall != 0.0:
-            leg1_param.cadence = 1.0 / leg1_param.stride_intervall
-        if leg2_param.stride_intervall != 0.0:
-            leg2_param.cadence = 1.0 / leg2_param.stride_intervall
-
-        leg1_param.stance_time = self.stance_duration(hs_l1_t, to_l1_t)
-        leg2_param.stance_time = self.stance_duration(hs_l2_t, to_l2_t)
-
-        leg1_param.step_length, leg2_param.step_length = self.step_length(time_stamps, left_toe_norm, right_toe_norm)
-        params.leg1 = leg1_param
-        params.leg2 = leg2_param
-
-        ret_dict = {}
-        ret_dict['/gait/toe_params'] = params
-        ret_dict['/gait/toe_band'] = debugs
-
-        # self.publish_params(ret_dict)
-        print("Publishing gait parameters for toe")
-        end_time = rospy.Time.now().to_sec()
-        rospy.loginfo("Gait estimation took %.2f seconds", end_time - start_time)
-
-        return ret_dict
-
-    # Plot the three time series together
-    def visualize(self, time_stamps, left_toe_norm, right_toe_norm, peak_indexes_l1, valley_indexes_l1, peak_indexes_l2, valley_indexes_l2):
-        plt.ion()
-        plt.figure(figsize=(8, 5))
-        plt.plot(time_stamps, left_toe_norm, label='Left Toe RMS', alpha=0.7)
-        plt.plot(time_stamps, right_toe_norm, label='Right Toe RMS', alpha=0.7)
-
-        # Add peaks and valleys as dots
-        plt.scatter([time_stamps[i] for i in peak_indexes_l1], [left_toe_norm[i]
-                    for i in peak_indexes_l1], color='red', label='Left Toe Peaks', zorder=5)
-        plt.scatter([time_stamps[i] for i in valley_indexes_l1], [left_toe_norm[i]
-                    for i in valley_indexes_l1], color='blue', label='Left Toe Valleys', zorder=5)
-        plt.scatter([time_stamps[i] for i in peak_indexes_l2], [right_toe_norm[i]
-                    for i in peak_indexes_l2], color='green', label='Right Toe Peaks', zorder=5)
-        plt.scatter([time_stamps[i] for i in valley_indexes_l2], [right_toe_norm[i]
-                    for i in valley_indexes_l2], color='orange', label='Right Toe Valleys', zorder=5)
-
-        plt.xlabel('Time (s)')
-        plt.ylabel('Distance')
-        plt.title('Toe RMS and Toe Difference')
-        plt.legend()
-        plt.grid(True)
-        # plt.show()
-        plt.draw()
-        plt.pause(0.001)
-
-    def calculate_toe_in_map_frame(self, window_poses, window_toe, left):
-        if not self._data_synced or len(window_poses) == 0 or len(window_toe) == 0:
-            return None
-
-        pose_timestamps = [pose.header.stamp.to_sec() - self.pose_data.timestamp_offset for pose in window_poses]
-
-        pose_at_toe_point = window_poses[[self.closest_node((hs.header.stamp.to_sec() - self.toe_data.timestamp_offset), pose_timestamps)
-                                          for hs in window_toe]]
-
-        toe_in_map_frame = []
-
-        for pose_at_toe_point, toe_point in zip(pose_at_toe_point, window_toe):
-
-            point = PointStamped()
-            point.header = toe_point.header
-            if left:
-                point.point = toe_point.poses[0].position
-            else:
-                point.point = toe_point.poses[1].position
-
-            q = tf.transformations.quaternion_about_axis(pose_at_toe_point.pose.theta, (0, 0, 1))
-
-            t = TransformStamped()
-            t.header.stamp = pose_at_toe_point.header.stamp
-            t.header.frame_id = pose_at_toe_point.header.frame_id  # Should be 'map' frame
-            t.child_frame_id = toe_point.header.frame_id  # Should be 'base_link' frame
-            t.transform.translation.x = pose_at_toe_point.pose.x
-            t.transform.translation.y = pose_at_toe_point.pose.y
-            t.transform.rotation.x = q[0]
-            t.transform.rotation.y = q[1]
-            t.transform.rotation.z = q[2]
-            t.transform.rotation.w = q[3]
-
-            toe_in_map_frame.append(tf2_geometry_msgs.do_transform_point(point, t))
-
-            # print("Toe position in map frame: ", left_point)
-
-        return toe_in_map_frame
-
-    def step_length(self, time_stamps, leg1, leg2):
-
-        # TODO: (Andreas) calculate step length
-        # 1. Transform positions of heel strike to map frame with mobile_robot_pose
-        # 2. Calculate distance between heel strike of one foot to heel strike of other foot
-        # 3. Publishi visualization to confirm locations on the map with camera data
-
-        min_peak_dist = self.toe_data.fs * (1.0 / self._highcut) * 2
-
-        if min_peak_dist < 1.0:
-            # signal.find_peaks requires a minimum distance of 1.0
-            rospy.logerr("min_peak_dist is < 1, return estimator_toe method")
-            return 0.0, 0.0
-
-        # since we're using RMS (absolute distance) peak = TO (maximum distance), valley = HS (minimum distance)
-        min_peak_dist = self.toe_data.fs * (1.0 / self._highcut) * 2
-        pkwidth = self.toe_data.fs * (0.1 / self._highcut) if self.toe_data.fs * (0.1 / self._highcut) > 1.0 else 1.0
-        peak_indexes_l1, _ = signal.find_peaks(leg1, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-        valley_indexes_l1, _ = signal.find_peaks(-leg1, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-        peak_indexes_l2, _ = signal.find_peaks(leg2, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-        valley_indexes_l2, _ = signal.find_peaks(-leg2, distance=min_peak_dist, prominence=0.025, width=pkwidth)
-
-        # TODO: (Andreas) unused
-        # to_l1_t = np.array([time_stamps[p] for p in peak_indexes_l1])
-        # hs_l1_t = np.array([time_stamps[v] for v in valley_indexes_l1])
-
-        # to_l2_t = np.array([time_stamps[p] for p in peak_indexes_l2])
-        # hs_l2_t = np.array([time_stamps[v] for v in valley_indexes_l2])
-
-        xc, yc = prep.interpolated_intercept(np.array(time_stamps), leg1, leg2)
-
-        # plt.figure(figsize=(8, 5))
-        # plt.plot(time_stamps, leg1, label='Leg1 (Left Toe)', alpha=0.7)
-        # plt.plot(time_stamps, leg2, label='Leg2 (Right Toe)', alpha=0.7)
-
-        # # Add peaks and valleys
-        # plt.scatter([time_stamps[i] for i in peak_indexes_l1], [leg1[i] for i in peak_indexes_l1],
-        #             color='red', label='Leg1 Peaks', zorder=5)
-        # plt.scatter([time_stamps[i] for i in valley_indexes_l1], [leg1[i] for i in valley_indexes_l1],
-        #             color='blue', label='Leg1 Valleys', zorder=5)
-        # plt.scatter([time_stamps[i] for i in peak_indexes_l2], [leg2[i] for i in peak_indexes_l2],
-        #             color='green', label='Leg2 Peaks', zorder=5)
-        # plt.scatter([time_stamps[i] for i in valley_indexes_l2], [leg2[i] for i in valley_indexes_l2],
-        #             color='orange', label='Leg2 Valleys', zorder=5)
-
-        # # Visualize interpolated intercept
-        # plt.scatter(xc, yc, color='black', label='Interpolated Intercept', marker='x', zorder=6)
-
-        # plt.xlabel('Time (s)')
-        # plt.ylabel('Distance')
-        # plt.title('Leg1 and Leg2 Timeseries with Peaks, Valleys, and Intercept')
-        # plt.legend()
-        # plt.grid(True)
-        # plt.show()
-
-        xc_ind = []
-
-        for x in xc:
-            if x in time_stamps:
-                xc_ind.append(time_stamps.index(x))
-            else:
-                ind = next((t for t in time_stamps if t > x), None)
-                if ind:
-                    xc_ind.append(time_stamps.index(ind))
-
-        l1steps = []
-        l2steps = []
-
-        # rotation Hs = valley; negative x :HS = Peak; negative y HS:valley
-        l1_hs_ind = valley_indexes_l1
-        l2_hs_ind = valley_indexes_l2
-
-        for i in range(len(l1_hs_ind)):
-            if any(x > l1_hs_ind[i] for x in xc_ind):
-                x1 = next((x for x in xc_ind if x > l1_hs_ind[i]), None)
-                if x1 and ((i == len(l1_hs_ind) - 1) or (x1 < l1_hs_ind[i + 1])):
-                    l1steps.append(leg1[l1_hs_ind[i]] - leg1[x1])
-        for i in range(len(l2_hs_ind)):
-            if any(x > l2_hs_ind[i] for x in xc_ind):
-                x2 = next((x for x in xc_ind if x > l2_hs_ind[i]), None)
-                if x2 and ((i == len(l2_hs_ind) - 1) or (x2 < l2_hs_ind[i + 1])):
-                    l2steps.append(leg2[l2_hs_ind[i]] - leg2[x2])
-
-        l1_step = 0.0
-        l2_step = 0.0
-        if l1steps:
-            l1_step = sum(l1steps) / len(l1steps)
-            # rospy.loginfo("!!!! ::::::::: >>>>>STEP LENGTH L1 %.8f", sum(l1steps) / len(l1steps) )
-        if l2steps:
-            l2_step = sum(l2steps) / len(l2steps)
-            # rospy.loginfo("!!!! ::::::::: >>>>>STEP LENGTH L2 %.8f", sum(l2steps) / len(l2steps) )
-
-        return l1_step, l2_step
+        return strides_dict
 
 
 if __name__ == '__main__':
 
-
     rospy.init_node('tf_bag_reader')
 
-    EstimatorToeFromBag()
-
-    while not rospy.is_shutdown():
-        rospy.spin()
-
-
-
-    # rospy.init_node('gait_estimation', log_level=rospy.INFO)
-    # rospy.get_rostime()
-    # rospy.get_time()
-
-    # # Retrieve bool parameters (with default = True)
-    # use_force = rospy.get_param('/gait_estimation/use_force', True)
-    # use_leg = rospy.get_param('/gait_estimation/use_leg', True)
-    # use_toe = rospy.get_param('/gait_estimation/use_toe', True)
-    # use_shoulder = rospy.get_param('/gait_estimation/use_shoulder', True)
-
-    # window_size = rospy.get_param('/gait_estimation/window_size', 7.0)
-    # window_step = rospy.get_param('/gait_estimation/window_step', 1.0)
-    # estimators = {}
-    # pub_dicts = {}
-
-    # force_pub = rospy.Publisher('/gait/force_params', gp, tcp_nodelay=True, queue_size=1024)
-    # legs_pub = rospy.Publisher('/gait/leg_params', gp, tcp_nodelay=True, queue_size=1024)
-    # toe_pub = rospy.Publisher('/gait/toe_params', gp, tcp_nodelay=True, queue_size=1024)
-    # shoulder_pub = rospy.Publisher('/gait/shoulder_params', gp, tcp_nodelay=True, queue_size=1024)
-    # left_toe_heelstrike_in_map = rospy.Publisher('/gait/left_toe_heelstrike_in_map', PointStamped, tcp_nodelay=True, queue_size=1024)
-    # right_toe_heelstrike_in_map = rospy.Publisher('/gait/right_toe_heelstrike_in_map', PointStamped, tcp_nodelay=True, queue_size=1024)
-    # left_toe_toe_off_in_map = rospy.Publisher('/gait/left_toe_toe_off_in_map', PointStamped, tcp_nodelay=True, queue_size=1024)
-    # right_toe_toe_off_in_map = rospy.Publisher('/gait/right_toe_toe_off_in_map', PointStamped, tcp_nodelay=True, queue_size=1024)
-
-    # rospy.sleep(rospy.Duration(0.25))
-    # # est_force = EstimatorForce()
-    # # est_leg = EstimatorLegs()
-    # est_toe = EstimatorToeFromBag()
-    # # est_sh = EstimatorShoulder()
-
-    # # Add each estimator to the dictionary only if its parameter is true
-    # # if use_force:
-    # #     estimators['force'] = est_force
-    # # if use_leg:
-    # #     estimators['legs'] = est_leg
-    # if use_toe:
-    #     estimators['toe'] = est_toe
-    # # if use_shoulder:
-    # #     estimators['shoulder'] = est_sh
-
-    # rospy.loginfo("Start collecting data")
-    # rospy.sleep(rospy.Duration(window_size))
-    # rospy.loginfo("Start timed thread")
-    # rospy.timer.Timer(rospy.Duration(window_step), est_toe.gait_estimation)
-
-    # while not rospy.is_shutdown():
-    #     rospy.spin()
+    estimator = EstimatorToeFromBag('/home/docker/ros_ws/data/toe_positions.bag')

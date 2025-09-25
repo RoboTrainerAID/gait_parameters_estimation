@@ -7,6 +7,7 @@ import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped
 import numpy as np
 from scipy import signal
+from std_msgs.msg import Float32, Int32, Float32MultiArray
 
 import matplotlib.pyplot as plt
 
@@ -45,6 +46,8 @@ class EstimatorToeFromBag():
         param_dict = self.gait_parameters(left_t, left_dist, right_t, right_dist, toe_left_msg_map_frame, toe_right_msg_map_frame)
         filtered_param_dict = {k: v for k, v in param_dict.items() if 'raw' not in k}
         rospy.loginfo("Estimated Gait Parameters: %s", filtered_param_dict)
+
+        self._write_to_bag(bag_file_path.replace('.bag', '_gait_output.bag'), param_dict)
         
         # --- Plot comparison ---
         original_left_t, original_left_dist = self._get_normalized_distance(toe_left_msg)
@@ -57,8 +60,8 @@ class EstimatorToeFromBag():
             'original_right': (original_right_t, original_right_dist),
             # 'left_pos_map': (np.array(sorted(toe_left_msg_map_frame.keys())), np.array([toe_left_msg_map_frame[ts].point.x for ts in sorted(toe_left_msg_map_frame.keys())])),
             # 'right_pos_map': (np.array(sorted(toe_right_msg_map_frame.keys())), np.array([toe_right_msg_map_frame[ts].point.x for ts in sorted(toe_right_msg_map_frame.keys())])),
-            '/left/stride': (np.array(param_dict['/left/stride/raw']['stride_timestamp']), np.array(param_dict['/left/stride/raw']['stride_length'])),
-            '/right/stride': (np.array(param_dict['/right/stride/raw']['stride_timestamp']), np.array(param_dict['/right/stride/raw']['stride_length'])),
+            '/left/stride': (np.array(param_dict['/left/raw']['timestamps']), np.array(param_dict['/left/raw']['stride_length'])),
+            '/right/stride': (np.array(param_dict['/right/raw']['timestamps']), np.array(param_dict['/right/raw']['stride_length'])),
 
         }
         plot_points = {
@@ -383,14 +386,14 @@ class EstimatorToeFromBag():
         avg_param_dict['/left/swing_time/avg'] = np.mean(left_strides['swing_time'])
         avg_param_dict['/left/stance_time/avg'] = np.mean(left_strides['stance_time'])
         avg_param_dict['/left/num_strides'] = len(left_strides['stride_length'])
-        avg_param_dict['/left/stride/raw'] = left_strides
+        avg_param_dict['/left/raw'] = left_strides
         
         avg_param_dict['/right/stride_length/avg'] = np.mean(right_strides['stride_length'])
         avg_param_dict['/right/stride_duration/avg'] = np.mean(right_strides['stride_duration'])
         avg_param_dict['/right/swing_time/avg'] = np.mean(right_strides['swing_time'])
         avg_param_dict['/right/stance_time/avg'] = np.mean(right_strides['stance_time'])
         avg_param_dict['/right/num_strides'] = len(right_strides['stride_length'])
-        avg_param_dict['/right/stride/raw'] = right_strides
+        avg_param_dict['/right/raw'] = right_strides
 
         # Cadence (steps/min) = 60 / (left_stride_durations + right_stride_durations) / 2
         avg_stride_duration = (avg_param_dict['/left/stride_duration/avg'] + avg_param_dict['/right/stride_duration/avg']) / 2.0
@@ -430,14 +433,14 @@ class EstimatorToeFromBag():
 
         Returns:
             dict: A dictionary containing lists of 'stride_length', 'stride_duration',
-                  'swing_time', 'stance_time', and 'stride_timestamp' for all detected strides.
+                  'swing_time', 'stance_time', and 'timestamps' for all detected strides.
         """
         strides_dict = {
             'stride_length': [],
             'stride_duration': [],
             'swing_time': [],
             'stance_time': [],
-            'stride_timestamp': []
+            'timestamps': []
         }
         if len(heel_strike_indices) < 2:
             rospy.logwarn("Not enough heel-strike events to calculate strides.")
@@ -476,12 +479,57 @@ class EstimatorToeFromBag():
                     strides_dict['stride_duration'].append(stride_duration)
                     strides_dict['swing_time'].append(swing_time)
                     strides_dict['stance_time'].append(stance_time)
-                    strides_dict['stride_timestamp'].append(hs2_time_sec)
+                    strides_dict['timestamps'].append(hs2_time_sec)
             else:
                 rospy.logwarn("Could not find position data for a stride event timestamp. Skipping stride.")
 
         return strides_dict
 
+    def _write_to_bag(self, bag_path, param_dict):
+        """
+        Writes the gait parameters to a new rosbag file.
+
+        Args:
+            bag_path (str): The path to the output rosbag file.
+            param_dict (dict): The dictionary of gait parameters to write.
+        """
+        try:
+            with rosbag.Bag(bag_path, 'w') as bag:
+                for key, value in param_dict.items():
+                    if isinstance(value, dict):
+                        timestamps = value["timestamps"]
+                        for k in value.keys():
+                            if k == "timestamps":
+                                continue
+                            for data, t in zip(value[k], timestamps):
+                                if isinstance(data, float):
+                                    msg = Float32()
+                                    msg.data = data
+                                elif isinstance(data, int):
+                                    msg = Int32()
+                                    msg.data = data
+                                else:
+                                    rospy.logwarn("Unsupported data type in list for key '%s'. Skipping.", k)
+                                    continue
+                                
+                                bag.write('/gait' + key + '/' + k , msg, rospy.Time.from_sec(t))
+                        
+                    elif isinstance(value, float):
+                        msg = Float32()
+                        msg.data = value
+                        bag.write('/gait' + key, msg, rospy.Time.now())
+                    elif isinstance(value, int):
+                        msg = Int32()
+                        msg.data = value
+                        bag.write('/gait' + key, msg, rospy.Time.now())
+                    else:
+                        rospy.logwarn("Unsupported data type for key '%s'. Skipping.", key)
+                        continue
+                    
+
+            rospy.loginfo("Gait parameters written to bag: %s", bag_path)
+        except Exception as e:
+            rospy.logerr("Failed to write gait parameters to bag: %s", e)
 
 if __name__ == '__main__':
 

@@ -59,7 +59,7 @@ class EstimatorToeFromBag():
         # Plot all point series
         for label, (timestamps, data) in plot_points.items():
             if data.size > 0 and timestamps.size == data.size:
-                plt.scatter(timestamps, data, label=label, s=10) # s for marker size
+                plt.scatter(timestamps, data, label=label, s=80) # s for marker size
             else:
                 rospy.logwarn("Skipping plot for points '%s': data/timestamp size mismatch or empty.", label)
                 print('sizes:', timestamps.size, data.size)
@@ -397,12 +397,12 @@ class EstimatorToeFromBag():
         # plot_lines = {
         #     'original_left': (estimator.original_left_t, estimator.original_left_dist),
         #     'original_right': (estimator.original_right_t, estimator.original_right_dist),
-        #     # 'left_dist': (self.left_t, self.left_dist),
-        #     # 'right_dist': (self.right_t, self.right_dist),
-        #     '/left/stride_length': (np.array(avg_param_dict['/left/raw']['stride_timestamps']), np.array(avg_param_dict['/left/raw']['stride_length'])),
-        #     '/right/stride_length': (np.array(avg_param_dict['/right/raw']['stride_timestamps']), np.array(avg_param_dict['/right/raw']['stride_length'])),
-        #     '/left/step_length': (np.array(avg_param_dict['/left/raw']['step_timestamps']), np.array(avg_param_dict['/left/raw']['step_length'])),
-        #     '/right/step_length': (np.array(avg_param_dict['/right/raw']['step_timestamps']), np.array(avg_param_dict['/right/raw']['step_length'])),
+        #     'left_dist': (self.left_t, self.left_dist),
+        #     'right_dist': (self.right_t, self.right_dist),
+        #     # '/left/stride_length': (np.array(avg_param_dict['/left/raw']['stride_timestamps']), np.array(avg_param_dict['/left/raw']['stride_length'])),
+        #     # '/right/stride_length': (np.array(avg_param_dict['/right/raw']['stride_timestamps']), np.array(avg_param_dict['/right/raw']['stride_length'])),
+        #     # '/left/step_length': (np.array(avg_param_dict['/left/raw']['step_timestamps']), np.array(avg_param_dict['/left/raw']['step_length'])),
+        #     # '/right/step_length': (np.array(avg_param_dict['/right/raw']['step_timestamps']), np.array(avg_param_dict['/right/raw']['step_length'])),
         # }
         # plot_points = {
         #     'left_to': (self.left_t[left_to_idx], self.left_dist[left_to_idx]),

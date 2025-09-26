@@ -7,21 +7,14 @@ import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped
 import numpy as np
 from scipy import signal
-from std_msgs.msg import Float32, Int32, Float32MultiArray
+from std_msgs.msg import Float32, Int32
 
 import matplotlib.pyplot as plt
 
 
 class EstimatorToeFromBag():
 
-    def __init__(self, bag_file_path):
-
-        topics = [
-            '/tf',
-            '/tf_static',
-            '/toe_position/left/kalman',
-            '/toe_position/right/kalman',
-        ]
+    def __init__(self, bag_file_path, topics):
 
         self.tf_buffer, messages = self._read_data_from_bag(bag_file_path, topics)
 
@@ -33,44 +26,20 @@ class EstimatorToeFromBag():
         toe_left_msg_filtered = self._smooth_and_filter_data(toe_left_msg, cutoff=2.0, order=4)
         toe_right_msg_filtered = self._smooth_and_filter_data(toe_right_msg, cutoff=2.0, order=4)
 
-        # --- Transform to 'map' frame ---
-        toe_left_msg_map_frame = self._transform_to_map_frame(toe_left_msg_filtered)
-        toe_right_msg_map_frame = self._transform_to_map_frame(toe_right_msg_filtered)
-        # synchronized_toe_data = self._synchronize_toe_data(toe_left_msg_map_frame, toe_right_msg_map_frame, slop=0.001)
+        # --- Transform to 'map' frame and store as instance variables ---
+        self.toe_left_msg_map_frame = self._transform_to_map_frame(toe_left_msg_filtered)
+        self.toe_right_msg_map_frame = self._transform_to_map_frame(toe_right_msg_filtered)
+        self.synchronized_toe_data = self._synchronize_toe_data(self.toe_left_msg_map_frame, self.toe_right_msg_map_frame, slop=0.001)
 
-        # --- Calculate normalized toe distance from dict ---
-        left_t, left_dist = self._get_normalized_distance(toe_left_msg_filtered)
-        right_t, right_dist = self._get_normalized_distance(toe_right_msg_filtered)
+        # --- Calculate normalized toe distance and store ---
+        self.left_t, self.left_dist = self._get_normalized_distance(toe_left_msg_filtered)
+        self.right_t, self.right_dist = self._get_normalized_distance(toe_right_msg_filtered)
 
-        # --- Calculate gait parameters ---
-        param_dict = self.gait_parameters(left_t, left_dist, right_t, right_dist, toe_left_msg_map_frame, toe_right_msg_map_frame)
-        filtered_param_dict = {k: v for k, v in param_dict.items() if 'raw' not in k}
-        rospy.loginfo("Estimated Gait Parameters: %s", filtered_param_dict)
+        # --- Store original data for plotting comparison ---
+        self.original_left_t, self.original_left_dist = self._get_normalized_distance(toe_left_msg)
+        self.original_right_t, self.original_right_dist = self._get_normalized_distance(toe_right_msg)
 
-        self._write_to_bag(bag_file_path.replace('.bag', '_gait_output.bag'), param_dict)
-        
-        # --- Plot comparison ---
-        original_left_t, original_left_dist = self._get_normalized_distance(toe_left_msg)
-        original_right_t, original_right_dist = self._get_normalized_distance(toe_right_msg)
-
-        plot_lines = {
-            # 'left_dist': (left_t, left_dist),
-            # 'right_dist': (right_t, right_dist),
-            'original_left': (original_left_t, original_left_dist),
-            'original_right': (original_right_t, original_right_dist),
-            # 'left_pos_map': (np.array(sorted(toe_left_msg_map_frame.keys())), np.array([toe_left_msg_map_frame[ts].point.x for ts in sorted(toe_left_msg_map_frame.keys())])),
-            # 'right_pos_map': (np.array(sorted(toe_right_msg_map_frame.keys())), np.array([toe_right_msg_map_frame[ts].point.x for ts in sorted(toe_right_msg_map_frame.keys())])),
-            '/left/stride': (np.array(param_dict['/left/raw']['timestamps']), np.array(param_dict['/left/raw']['stride_length'])),
-            '/right/stride': (np.array(param_dict['/right/raw']['timestamps']), np.array(param_dict['/right/raw']['stride_length'])),
-
-        }
-        plot_points = {
-        }
-
-        self._plot_data(plot_lines, plot_points)
-
-
-    def _plot_data(self, plot_lines={}, plot_points={}):
+    def plot_data(self, plot_lines={}, plot_points={}):
         """
         Plots an arbitrary number of data series on a single graph using timestamps.
 
@@ -340,16 +309,17 @@ class EstimatorToeFromBag():
         
         return np.array(sorted_stamps), distances
     
-    def gait_parameters(self, left_t, left_dist, right_t, right_dist, toe_left_msg_map_frame, toe_right_msg_map_frame):
+    def gait_parameters(self):
         """
         Calculates gait parameters by finding peaks and valleys in the distance data.
+        Uses pre-processed data stored in instance variables.
         """
-        if len(left_t) < 2:
+        if len(self.left_t) < 2:
             rospy.logwarn("Not enough data to perform gait analysis.")
             return {}
 
         # --- Estimate Sampling Frequency from Timestamps ---
-        fs = 1.0 / np.mean(np.diff(left_t))
+        fs = 1.0 / np.mean(np.diff(self.left_t))
         rospy.loginfo("Gait analysis using estimated sampling frequency: %.2f Hz", fs)
 
         # --- Peak Detection Parameters ---
@@ -363,37 +333,57 @@ class EstimatorToeFromBag():
         #     peak_prominence, peak_distance, min_peak_distance_sec))
 
         # TODO: (Andreas) This is only valid for RoboTrainer moving forward in +x direction, when moving backwards the peak valley mapping to TO/HS is inverted
-        left_to_idx, _ = signal.find_peaks(left_dist, distance=peak_distance, prominence=peak_prominence)
-        left_hs_idx, _ = signal.find_peaks(-left_dist, distance=peak_distance, prominence=peak_prominence)
-        right_to_idx, _ = signal.find_peaks(right_dist, distance=peak_distance, prominence=peak_prominence)
-        right_hs_idx, _ = signal.find_peaks(-right_dist, distance=peak_distance, prominence=peak_prominence)
+        left_to_idx, _ = signal.find_peaks(self.left_dist, distance=peak_distance, prominence=peak_prominence)
+        left_hs_idx, _ = signal.find_peaks(-self.left_dist, distance=peak_distance, prominence=peak_prominence)
+        right_to_idx, _ = signal.find_peaks(self.right_dist, distance=peak_distance, prominence=peak_prominence)
+        right_hs_idx, _ = signal.find_peaks(-self.right_dist, distance=peak_distance, prominence=peak_prominence)
 
         rospy.loginfo("Detected %d left peaks and %d left valleys.", len(left_to_idx), len(left_hs_idx))
         rospy.loginfo("Detected %d right peaks and %d right valleys.", len(right_to_idx), len(right_hs_idx))
 
         # --- Calculate Stride Parameters ---
-        left_strides = self.calculate_strides(toe_left_msg_map_frame, left_t, left_hs_idx, left_to_idx)
-        right_strides = self.calculate_strides(toe_right_msg_map_frame, right_t, right_hs_idx, right_to_idx)
+        left_strides = self._calculate_strides(self.toe_left_msg_map_frame, self.left_t, left_hs_idx, left_to_idx)
+        right_strides = self._calculate_strides(self.toe_right_msg_map_frame, self.right_t, right_hs_idx, right_to_idx)
+
+        # --- Calculate Step Parameters ---
+        left_steps, right_steps = self._calculate_step_lengths(
+            self.left_t, self.right_t, left_hs_idx, right_hs_idx,
+            self.toe_left_msg_map_frame, self.toe_right_msg_map_frame
+        )
 
         avg_param_dict = {}
 
-        if not left_strides['stride_length'] or not right_strides['stride_length']:
-            rospy.logwarn("No valid strides detected for one or both feet. Cannot compute average gait parameters.")
+        if not left_strides['stride_length'] or not right_strides['stride_length'] or not left_steps['step_length'] or not right_steps['step_length']:
+            rospy.logwarn("Insufficient stride or step data to compute averages.")
             return avg_param_dict
         
         avg_param_dict['/left/stride_length/avg'] = np.mean(left_strides['stride_length'])
         avg_param_dict['/left/stride_duration/avg'] = np.mean(left_strides['stride_duration'])
-        avg_param_dict['/left/swing_time/avg'] = np.mean(left_strides['swing_time'])
-        avg_param_dict['/left/stance_time/avg'] = np.mean(left_strides['stance_time'])
+        avg_param_dict['/left/stride_swing_time/avg'] = np.mean(left_strides['stride_swing_time'])
+        avg_param_dict['/left/stride_stance_time/avg'] = np.mean(left_strides['stride_stance_time'])
         avg_param_dict['/left/num_strides'] = len(left_strides['stride_length'])
-        avg_param_dict['/left/raw'] = left_strides
+        left_raw = left_strides.copy()
+        left_raw.update(left_steps)
+        avg_param_dict['/left/raw'] = left_raw
         
         avg_param_dict['/right/stride_length/avg'] = np.mean(right_strides['stride_length'])
         avg_param_dict['/right/stride_duration/avg'] = np.mean(right_strides['stride_duration'])
-        avg_param_dict['/right/swing_time/avg'] = np.mean(right_strides['swing_time'])
-        avg_param_dict['/right/stance_time/avg'] = np.mean(right_strides['stance_time'])
+        avg_param_dict['/right/stride_swing_time/avg'] = np.mean(right_strides['stride_swing_time'])
+        avg_param_dict['/right/stride_stance_time/avg'] = np.mean(right_strides['stride_stance_time'])
         avg_param_dict['/right/num_strides'] = len(right_strides['stride_length'])
-        avg_param_dict['/right/raw'] = right_strides
+        right_raw = right_strides.copy()
+        right_raw.update(right_steps)
+        avg_param_dict['/right/raw'] = right_raw
+
+        avg_param_dict['/left/step_length/avg'] = np.mean(left_steps['step_length'])
+        avg_param_dict['/left/step_duration/avg'] = np.mean(left_steps['step_duration'])
+        avg_param_dict['/left/num_steps'] = len(left_steps['step_length'])
+
+        avg_param_dict['/right/step_length/avg'] = np.mean(right_steps['step_length'])
+        avg_param_dict['/right/step_duration/avg'] = np.mean(right_steps['step_duration'])
+        avg_param_dict['/right/num_steps'] = len(right_steps['step_length'])
+
+        avg_param_dict['/timestamp'] = left_steps['step_timestamps'][-1] 
 
         # Cadence (steps/min) = 60 / (left_stride_durations + right_stride_durations) / 2
         avg_stride_duration = (avg_param_dict['/left/stride_duration/avg'] + avg_param_dict['/right/stride_duration/avg']) / 2.0
@@ -403,22 +393,100 @@ class EstimatorToeFromBag():
         avg_stride_length = (avg_param_dict['/left/stride_length/avg'] + avg_param_dict['/right/stride_length/avg']) / 2.0
         avg_param_dict['/speed/avg'] = avg_stride_length / avg_stride_duration
 
+        # --- Plot comparison ---
         # plot_lines = {
-        #     'left_dist': (left_t, left_dist),
-        #     'right_dist': (right_t, right_dist),
+        #     'original_left': (estimator.original_left_t, estimator.original_left_dist),
+        #     'original_right': (estimator.original_right_t, estimator.original_right_dist),
+        #     # 'left_dist': (self.left_t, self.left_dist),
+        #     # 'right_dist': (self.right_t, self.right_dist),
+        #     '/left/stride_length': (np.array(avg_param_dict['/left/raw']['stride_timestamps']), np.array(avg_param_dict['/left/raw']['stride_length'])),
+        #     '/right/stride_length': (np.array(avg_param_dict['/right/raw']['stride_timestamps']), np.array(avg_param_dict['/right/raw']['stride_length'])),
+        #     '/left/step_length': (np.array(avg_param_dict['/left/raw']['step_timestamps']), np.array(avg_param_dict['/left/raw']['step_length'])),
+        #     '/right/step_length': (np.array(avg_param_dict['/right/raw']['step_timestamps']), np.array(avg_param_dict['/right/raw']['step_length'])),
         # }
         # plot_points = {
-        #     'left_to': (left_t[left_to_idx], left_dist[left_to_idx]),
-        #     'left_hs': (left_t[left_hs_idx], left_dist[left_hs_idx]),
-        #     'right_to': (right_t[right_to_idx], right_dist[right_to_idx]),
-        #     'right_hs': (right_t[right_hs_idx], right_dist[right_hs_idx]),
+        #     'left_to': (self.left_t[left_to_idx], self.left_dist[left_to_idx]),
+        #     'left_hs': (self.left_t[left_hs_idx], self.left_dist[left_hs_idx]),
+        #     'right_to': (self.right_t[right_to_idx], self.right_dist[right_to_idx]),
+        #     'right_hs': (self.right_t[right_hs_idx], self.right_dist[right_hs_idx]),
         # }
 
-        # self._plot_data(plot_lines, plot_points)
+        # self.plot_data(plot_lines, plot_points)
 
         return avg_param_dict
 
-    def calculate_strides(self, position_data, timestamps, toe_off_indices, heel_strike_indices):
+    def _calculate_step_lengths(self, left_t, right_t, left_hs_idx, right_hs_idx, left_pos_data, right_pos_data):
+        """
+        Calculates step length by projecting the step vector onto the walking direction.
+        Returns two dictionaries, one for each foot, containing step parameters.
+        """
+        left_steps = {'step_length': [], 'step_duration': [], 'step_timestamps': []}
+        right_steps = {'step_length': [], 'step_duration': [], 'step_timestamps': []}
+
+        left_hs_times = left_t[left_hs_idx]
+        right_hs_times = right_t[right_hs_idx]
+
+        # Create a single sorted list of all heel-strike events
+        all_hs_events = sorted(
+            [(t, 'left') for t in left_hs_times] +
+            [(t, 'right') for t in right_hs_times]
+        )
+
+        if len(all_hs_events) < 3:
+            rospy.logwarn("Not enough heel strikes to calculate step length.")
+            return left_steps, right_steps
+
+        # Iterate through sequences of three consecutive heel strikes (e.g., L->R->L or R->L->R)
+        for i in range(len(all_hs_events) - 2):
+            hs1_time, hs1_foot = all_hs_events[i]
+            hs2_time, hs2_foot = all_hs_events[i+1]
+            hs3_time, hs3_foot = all_hs_events[i+2]
+
+            # We need an alternating foot pattern (e.g., left-right-left)
+            if hs1_foot == hs3_foot and hs1_foot != hs2_foot:
+                try:
+                    # Get the 3D points for the three heel strikes
+                    pos_data1 = left_pos_data if hs1_foot == 'left' else right_pos_data
+                    pos_data2 = left_pos_data if hs2_foot == 'left' else right_pos_data
+                    
+                    p1 = np.array([pos_data1[hs1_time].point.x, pos_data1[hs1_time].point.y, pos_data1[hs1_time].point.z])
+                    p2 = np.array([pos_data2[hs2_time].point.x, pos_data2[hs2_time].point.y, pos_data2[hs2_time].point.z])
+                    p3 = np.array([pos_data1[hs3_time].point.x, pos_data1[hs3_time].point.y, pos_data1[hs3_time].point.z])
+
+                    # Vector representing the walking direction for this stride
+                    walking_vector = p3 - p1
+                    walking_vector_norm = np.linalg.norm(walking_vector)
+
+                    if walking_vector_norm < 1e-6: # Avoid division by zero
+                        continue
+
+                    # Vector representing the current step
+                    step_vector = p3 - p2
+
+                    # Project step_vector onto walking_vector to get the step length
+                    # Formula: |step_vector . walking_vector| / |walking_vector|
+                    step_length = np.abs(np.dot(step_vector, walking_vector)) / walking_vector_norm
+                    step_duration = hs3_time - hs2_time
+
+                    # Filter out steps that are essentially zero length (e.g., from standing still)
+                    if step_length > 0.01: # 1 cm threshold
+                        if hs3_foot == 'left':
+                            left_steps['step_length'].append(step_length)
+                            left_steps['step_duration'].append(step_duration)
+                            left_steps['step_timestamps'].append(hs3_time)
+                        else:
+                            right_steps['step_length'].append(step_length)
+                            right_steps['step_duration'].append(step_duration)
+                            right_steps['step_timestamps'].append(hs3_time)
+
+                except KeyError as e:
+                    rospy.logwarn("KeyError finding position data for timestamp %s. Skipping step calculation.", e)
+                except Exception as e:
+                    rospy.logerr("An error occurred during step length calculation: %s", e)
+
+        return left_steps, right_steps
+
+    def _calculate_strides(self, position_data, timestamps, toe_off_indices, heel_strike_indices):
         """
         Calculates stride parameters based on heel-strike and toe-off events.
 
@@ -433,14 +501,14 @@ class EstimatorToeFromBag():
 
         Returns:
             dict: A dictionary containing lists of 'stride_length', 'stride_duration',
-                  'swing_time', 'stance_time', and 'timestamps' for all detected strides.
+                  'stride_swing_time', 'stride_stance_time', and 'stride_timestamps' for all detected strides.
         """
         strides_dict = {
             'stride_length': [],
             'stride_duration': [],
-            'swing_time': [],
-            'stance_time': [],
-            'timestamps': []
+            'stride_swing_time': [],
+            'stride_stance_time': [],
+            'stride_timestamps': []
         }
         if len(heel_strike_indices) < 2:
             rospy.logwarn("Not enough heel-strike events to calculate strides.")
@@ -474,18 +542,19 @@ class EstimatorToeFromBag():
                 p_hs2 = position_data[hs2_time_sec].point
                 stride_length = np.sqrt((p_hs2.x - p_hs1.x)**2 + (p_hs2.y - p_hs1.y)**2 + (p_hs2.z - p_hs1.z)**2)
 
-                if stride_duration > 0 and stride_length > 0:
+                # Filter out strides that are essentially zero length and have valid duration
+                if stride_duration > 0 and stride_length > 0.01: # 1 cm threshold
                     strides_dict['stride_length'].append(stride_length)
                     strides_dict['stride_duration'].append(stride_duration)
-                    strides_dict['swing_time'].append(swing_time)
-                    strides_dict['stance_time'].append(stance_time)
-                    strides_dict['timestamps'].append(hs2_time_sec)
+                    strides_dict['stride_swing_time'].append(swing_time)
+                    strides_dict['stride_stance_time'].append(stance_time)
+                    strides_dict['stride_timestamps'].append(hs2_time_sec)
             else:
                 rospy.logwarn("Could not find position data for a stride event timestamp. Skipping stride.")
 
         return strides_dict
 
-    def _write_to_bag(self, bag_path, param_dict):
+    def write_to_bag(self, bag_path, param_dict):
         """
         Writes the gait parameters to a new rosbag file.
 
@@ -495,35 +564,34 @@ class EstimatorToeFromBag():
         """
         try:
             with rosbag.Bag(bag_path, 'w') as bag:
+                timestamp_avg = param_dict["/timestamp"] 
+
                 for key, value in param_dict.items():
+                    if 'timestamp' in key:
+                        continue
+
                     if isinstance(value, dict):
-                        timestamps = value["timestamps"]
                         for k in value.keys():
-                            if k == "timestamps":
+                            timestamps_raw = value["step_timestamps"] if "step" in value else value["stride_timestamps"]
+                            if "timestamps" in k:
                                 continue
-                            for data, t in zip(value[k], timestamps):
+                            for data, t in zip(value[k], timestamps_raw):
                                 if isinstance(data, float):
                                     msg = Float32()
                                     msg.data = data
-                                elif isinstance(data, int):
-                                    msg = Int32()
-                                    msg.data = data
+                                    bag.write('/gait' + key + '/' + k , msg, rospy.Time.from_sec(t))
                                 else:
                                     rospy.logwarn("Unsupported data type in list for key '%s'. Skipping.", k)
                                     continue
                                 
-                                bag.write('/gait' + key + '/' + k , msg, rospy.Time.from_sec(t))
                         
-                    elif isinstance(value, float):
-                        msg = Float32()
+                    elif isinstance(value, (float, int)):
+                        msg = Float32() if isinstance(value, float) else Int32()
                         msg.data = value
-                        bag.write('/gait' + key, msg, rospy.Time.now())
-                    elif isinstance(value, int):
-                        msg = Int32()
-                        msg.data = value
-                        bag.write('/gait' + key, msg, rospy.Time.now())
+                        bag.write('/gait' + key, msg, rospy.Time.from_sec(timestamp_avg))
+
                     else:
-                        rospy.logwarn("Unsupported data type for key '%s'. Skipping.", key)
+                        rospy.logwarn("Unsupported data type for key '%s', type: %s. Skipping.", key, type(value))
                         continue
                     
 
@@ -534,5 +602,23 @@ class EstimatorToeFromBag():
 if __name__ == '__main__':
 
     rospy.init_node('tf_bag_reader')
+    
+    bag_file_path = '/home/docker/ros_ws/data/toe_positions.bag'
+    output_bag_path = bag_file_path.replace('.bag', '_gait_output.bag')
+    topics = [
+        '/tf',
+        '/tf_static',
+        '/toe_position/left/kalman',
+        '/toe_position/right/kalman',
+    ]
 
-    estimator = EstimatorToeFromBag('/home/docker/ros_ws/data/toe_positions.bag')
+    estimator = EstimatorToeFromBag(bag_file_path, topics)
+
+    # --- Calculate gait parameters ---
+    param_dict = estimator.gait_parameters()
+
+    filtered_param_dict = {k: v for k, v in param_dict.items() if 'raw' not in k}
+    rospy.loginfo("Estimated Gait Parameters: %s", filtered_param_dict)
+
+    # --- Write results to a new bag file ---
+    estimator.write_to_bag(output_bag_path, param_dict)

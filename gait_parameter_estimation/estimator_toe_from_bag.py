@@ -508,11 +508,27 @@ class EstimatorToeFromBag():
             'stride_duration': [],
             'stride_swing_time': [],
             'stride_stance_time': [],
-            'stride_timestamps': []
+            'stride_timestamps': [],
+            'HS_in_map_frame': [],
+            'TO_in_map_frame': [],
         }
         if len(heel_strike_indices) < 2:
             rospy.logwarn("Not enough heel-strike events to calculate strides.")
             return strides_dict
+        
+        # Add PointStamped messages in map_frame for heel-strikes
+        for hs_idx in heel_strike_indices:
+            if hs_idx < len(timestamps):
+                strides_dict['HS_in_map_frame'].append(position_data[timestamps[hs_idx]])
+            else:
+                rospy.logwarn("Heel-strike index %d out of bounds for timestamps array of length %d.", hs_idx, len(timestamps))
+
+        # Add PointStamped messages in map_frame for toe-offs
+        for to_idx in toe_off_indices:
+            if to_idx < len(timestamps):
+                strides_dict['TO_in_map_frame'].append(position_data[timestamps[to_idx]])
+            else:
+                rospy.logwarn("Toe-off index %d out of bounds for timestamps array of length %d.", to_idx, len(timestamps))
 
         # Iterate through consecutive heel-strikes to define each stride
         for i in range(len(heel_strike_indices) - 1):
@@ -580,6 +596,8 @@ class EstimatorToeFromBag():
                                     msg = Float32()
                                     msg.data = data
                                     bag.write('/gait' + key + '/' + k , msg, rospy.Time.from_sec(t))
+                                elif isinstance(data, PointStamped):
+                                    bag.write('/gait' + key + '/' + k , data, data.header.stamp)
                                 else:
                                     rospy.logwarn("Unsupported data type in list for key '%s'. Skipping.", k)
                                     continue
@@ -601,7 +619,7 @@ class EstimatorToeFromBag():
 
 if __name__ == '__main__':
 
-    rospy.init_node('tf_bag_reader')
+    rospy.init_node('gait_estimation_from_bag')
     
     bag_file_path = '/home/docker/ros_ws/data/toe_positions.bag'
     output_bag_path = bag_file_path.replace('.bag', '_gait_output.bag')

@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 
 class EstimatorToeFromBag():
 
-    def __init__(self, bag_file_path, topics):
+    def __init__(self, input_bag_path, topics):
 
-        self.tf_buffer, messages = self._read_data_from_bag(bag_file_path, topics)
+        self.tf_buffer, messages = self._read_data_from_bag(input_bag_path, topics)
 
         # --- Extract msgs from bag ---
         toe_left_msg = messages["/toe_position/left/kalman"] # type: Dict[float, PointStamped]
@@ -29,7 +29,7 @@ class EstimatorToeFromBag():
         # --- Transform to 'map' frame and store as instance variables ---
         self.toe_left_msg_map_frame = self._transform_to_map_frame(toe_left_msg_filtered)
         self.toe_right_msg_map_frame = self._transform_to_map_frame(toe_right_msg_filtered)
-        self.synchronized_toe_data = self._synchronize_toe_data(self.toe_left_msg_map_frame, self.toe_right_msg_map_frame, slop=0.001)
+        # self.synchronized_toe_data = self._synchronize_toe_data(self.toe_left_msg_map_frame, self.toe_right_msg_map_frame, slop=0.001)
 
         # --- Calculate normalized toe distance and store ---
         self.left_t, self.left_dist = self._get_normalized_distance(toe_left_msg_filtered)
@@ -620,9 +620,10 @@ class EstimatorToeFromBag():
 if __name__ == '__main__':
 
     rospy.init_node('gait_estimation_from_bag')
+
+    input_bag_path = rospy.get_param('~input_bag_path', '/home/docker/ros_ws/data/toe_positions.bag')
     
-    bag_file_path = '/home/docker/ros_ws/data/toe_positions.bag'
-    output_bag_path = bag_file_path.replace('.bag', '_gait_output.bag')
+    output_bag_path = input_bag_path.replace('.bag', '_gait_output.bag')
     topics = [
         '/tf',
         '/tf_static',
@@ -630,13 +631,20 @@ if __name__ == '__main__':
         '/toe_position/right/kalman',
     ]
 
-    estimator = EstimatorToeFromBag(bag_file_path, topics)
+    estimator = EstimatorToeFromBag(input_bag_path, topics)
 
     # --- Calculate gait parameters ---
     param_dict = estimator.gait_parameters()
 
-    filtered_param_dict = {k: v for k, v in param_dict.items() if 'raw' not in k}
-    rospy.loginfo("Estimated Gait Parameters: %s", filtered_param_dict)
+    rospy.loginfo("======= Estimated Gait Parameters: ======")
+    rospy.loginfo("Average speed: %.3f m/s", param_dict.get('/speed/avg', 0.0))
+    rospy.loginfo("Average cadence: %.1f steps/min", param_dict.get('/cadence/avg', 0.0))
+    rospy.loginfo("Number of strides left: %d, right: %d", param_dict.get('/left/num_strides', 0), param_dict.get('/right/num_strides', 0))
+    rospy.loginfo("Number of steps left: %d, right: %d", param_dict.get('/left/num_steps', 0), param_dict.get('/right/num_steps', 0))
+    rospy.loginfo("Average stride length left: %.3f m, right: %.3f m", param_dict.get('/left/stride_length/avg', 0.0), param_dict.get('/right/stride_length/avg', 0.0))
+    rospy.loginfo("Average step length left: %.3f m, right: %.3f m", param_dict.get('/left/step_length/avg', 0.0), param_dict.get('/right/step_length/avg', 0.0))
+    rospy.loginfo("Average stride duration left: %.3f s, right: %.3f s", param_dict.get('/left/stride_duration/avg', 0.0), param_dict.get('/right/stride_duration/avg', 0.0))
+    
 
     # --- Write results to a new bag file ---
     estimator.write_to_bag(output_bag_path, param_dict)

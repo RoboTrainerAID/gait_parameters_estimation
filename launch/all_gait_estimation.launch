@@ -8,7 +8,6 @@
     <arg name="use_force" default="false"/>
 
     <!-- ROBOT URDF -->
-    <!-- <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/launch_from_bag_urdf_and_tf.launch" /> -->
     <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/rviz_with_urdf.launch" />
 
     <!-- Transforms for from_bag launch -->

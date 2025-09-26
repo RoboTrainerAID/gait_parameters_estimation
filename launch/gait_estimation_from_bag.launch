@@ -7,9 +7,11 @@
     <!-- <include file="$(find gait_parameters_estimation)/launch/toe_detection.launch" /> -->
 
     <!-- <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/rviz_with_urdf.launch" /> -->
+    
+    <arg name="bag_file_path" default="/home/docker/ros_ws/data/KATE_AA_U010_16_yellow_line_force_right_60-1_2025-08-07-18-58-52.bag" />
 
-    <node pkg="gait_parameters_estimation" name="gait_estimation" type="estimator_toe_from_bag.py" output="screen">
-        <rosparam command="load" file="$(find gait_parameters_estimation)/config/config.yaml"/>
+    <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_from_bag.py" output="screen">
+        <param name="bag_file_path" value="$(arg bag_file_path)" />
     </node>
 
 </launch>

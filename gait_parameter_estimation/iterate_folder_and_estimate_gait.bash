@@ -9,8 +9,8 @@
 
 # --- Configuration ---
 # Set the default folder to search for bags if no argument is provided.
-INPUT_FOLDER="/home/docker/ros_ws/data"
-OUTPUT_FOLDER="$INPUT_FOLDER/../gait"
+INPUT_FOLDER="/home/docker/ros_ws/robotrainer/KATE_AA"
+OUTPUT_FOLDER="/home/docker/ros_ws/data/gait"
 
 # --- Script Logic ---
 # Check if the provided input folder exists
@@ -25,11 +25,20 @@ echo "Searching for bag files in: $INPUT_FOLDER"
 # to avoid processing already processed files.
 find "$INPUT_FOLDER" -type f -name "*.bag" ! -name "*_toe_output.bag" ! -name "*_gait_output.bag" | while read original_bag; do
     
-    echo "------------------------------------------------------------"
-    echo "Processing original file: $original_bag"
-    
     # Get the base name of the original file to construct new output names
     original_basename=$(basename "$original_bag")
+    
+    # Define the path for the final gait output file
+    gait_output_bag="$OUTPUT_FOLDER/${original_basename%.bag}_gait_output.bag"
+
+    # Check if the final output file already exists in the output folder
+    if [ -f "$gait_output_bag" ]; then
+        # echo "Final output file '$gait_output_bag' already exists. Skipping."
+        continue
+    fi
+
+    echo "------------------------------------------------------------"
+    echo "Processing original file: $original_bag"
     
     # Define the output path for the toe detection step inside the output folder
     toe_output_bag="$OUTPUT_FOLDER/${original_basename%.bag}_toe_output.bag"
@@ -40,7 +49,7 @@ find "$INPUT_FOLDER" -type f -name "*.bag" ! -name "*_toe_output.bag" ! -name "*
     
     # --- Step 1: Run Toe Detection with Kalman Filter ---
     echo "Running toe detection... Output will be: $toe_output_bag"
-    roslaunch camera_lower_leg_tracking toe_detection_kalman_from_bag.launch input_bag_path:="$original_bag" output_bag_path:="$toe_output_bag"
+    roslaunch --wait camera_lower_leg_tracking toe_detection_kalman_from_bag.launch input_bag_path:="$original_bag" output_bag_path:="$toe_output_bag"
     
     # Check if the toe detection was successful and created a non-empty file
     if [ ! -s "$toe_output_bag" ]; then
@@ -54,7 +63,7 @@ find "$INPUT_FOLDER" -type f -name "*.bag" ! -name "*_toe_output.bag" ! -name "*
     # The python script will create its output file relative to the input path,
     # so the gait_output.bag will also be saved in the OUTPUT_FOLDER.
     echo "Running gait estimation on: $toe_output_bag"
-    roslaunch gait_parameters_estimation gait_estimation_from_bag.launch input_bag_path:="$toe_output_bag"
+    roslaunch --wait gait_parameters_estimation gait_estimation_from_bag.launch input_bag_path:="$toe_output_bag"
     
     echo "Finished processing: $original_bag"
     echo "------------------------------------------------------------"

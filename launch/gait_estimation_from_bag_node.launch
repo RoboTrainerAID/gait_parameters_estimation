@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<launch>
+    
+    <arg name="input_bag_folder" default="/home/docker/ros_ws/data/toe" />
+    <arg name="output_bag_folder" default="/home/docker/ros_ws/data/gait" />
+
+    <node pkg="gait_parameters_estimation" name="gait_estimation_from_bag_node" type="gait_estimation_from_bag_node.py" output="screen">
+        <param name="input_bag_folder" value="$(arg input_bag_folder)" />
+        <param name="output_bag_folder" value="$(arg output_bag_folder)" />
+    </node>
+
+</launch>

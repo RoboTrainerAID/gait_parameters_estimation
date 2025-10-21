@@ -61,6 +61,19 @@ roslaunch gait_parameters_estimation gait_estimation_from_bag.launch
 rosbag play /path/to/your.bag
 ```
 
+## Testing asynchronous gait estimation from bag files
+```bash
+roslaunch camera_lower_leg_tracking toe_detection_kalman_from_bag_node.launch
+roslaunch gait_parameters_estimation gait_estimation_from_bag_node.launch
+rostopic pub -1 /robotrainer_user_study_manager/study_status std_msgs/String "data: 'KATE_AA_U010_16_yellow_line_force_right_60-1'"
+
+rosservice call /toe_detection_kalman_from_bag_node/process
+rosservice call /gait_estimation_from_bag_node/process
+
+# (Finally)
+rosbag play /path/to/your.bag
+```
+
 
 ## ROS Interface (from outdated/deprecated code that uses live ros topics)
 ### Node: gait_estimation_node.py

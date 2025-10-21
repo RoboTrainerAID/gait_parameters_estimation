@@ -743,6 +743,22 @@ class EstimatorToeFromBag():
         except Exception as e:
             rospy.logerr("Failed to write gait parameters to bag: %s", e)
 
+def print_metrics(param_dict):
+    """Prints the estimated gait parameters to the console."""
+    rospy.loginfo("======= Estimated Gait Parameters: ======")
+    rospy.loginfo("Average speed: %.3f m/s", param_dict.get('/speed/avg', 0.0))
+    rospy.loginfo("Average cadence: %.1f steps/min", param_dict.get('/cadence/avg', 0.0))
+    rospy.loginfo("Number of strides left: %d, right: %d", param_dict.get('/left/num_strides', 0), param_dict.get('/right/num_strides', 0))
+    rospy.loginfo("Number of steps left: %d, right: %d", param_dict.get('/left/num_steps', 0), param_dict.get('/right/num_steps', 0))
+    rospy.loginfo("Average stride length left: %.3f m, right: %.3f m", param_dict.get('/left/stride_length/avg', 0.0), param_dict.get('/right/stride_length/avg', 0.0))
+    rospy.loginfo("Average stride robust left: %.3f m, right: %.3f m", param_dict.get('/left/stride_length/robust_avg', 0.0), param_dict.get('/right/stride_length/robust_avg', 0.0))
+    rospy.loginfo("Average step length left: %.3f m, right: %.3f m", param_dict.get('/left/step_length/avg', 0.0), param_dict.get('/right/step_length/avg', 0.0))
+    rospy.loginfo("Average step robust left: %.3f m, right: %.3f m", param_dict.get('/left/step_length/robust_avg', 0.0), param_dict.get('/right/step_length/robust_avg', 0.0))
+    rospy.loginfo("Average stride duration left: %.3f s, right: %.3f s", param_dict.get('/left/stride_duration/avg', 0.0), param_dict.get('/right/stride_duration/avg', 0.0))
+    rospy.loginfo("Average stride durobust left: %.3f s, right: %.3f s", param_dict.get('/left/stride_duration/robust_avg', 0.0), param_dict.get('/right/stride_duration/robust_avg', 0.0))
+    rospy.loginfo("=========================================")
+
+
 if __name__ == '__main__':
 
     rospy.init_node('gait_estimation_from_bag')
@@ -766,18 +782,7 @@ if __name__ == '__main__':
         rospy.logerr("Gait parameter estimation failed or returned no data. Aborting write to bag.")
         exit()
 
-    rospy.loginfo("======= Estimated Gait Parameters: ======")
-    rospy.loginfo("Average speed: %.3f m/s", param_dict.get('/speed/avg', 0.0))
-    rospy.loginfo("Average cadence: %.1f steps/min", param_dict.get('/cadence/avg', 0.0))
-    rospy.loginfo("Number of strides left: %d, right: %d", param_dict.get('/left/num_strides', 0), param_dict.get('/right/num_strides', 0))
-    rospy.loginfo("Number of steps left: %d, right: %d", param_dict.get('/left/num_steps', 0), param_dict.get('/right/num_steps', 0))
-    rospy.loginfo("Average stride length left: %.3f m, right: %.3f m", param_dict.get('/left/stride_length/avg', 0.0), param_dict.get('/right/stride_length/avg', 0.0))
-    rospy.loginfo("Average stride robust left: %.3f m, right: %.3f m", param_dict.get('/left/stride_length/robust_avg', 0.0), param_dict.get('/right/stride_length/robust_avg', 0.0))
-    rospy.loginfo("Average step length left: %.3f m, right: %.3f m", param_dict.get('/left/step_length/avg', 0.0), param_dict.get('/right/step_length/avg', 0.0))
-    rospy.loginfo("Average step robust left: %.3f m, right: %.3f m", param_dict.get('/left/step_length/robust_avg', 0.0), param_dict.get('/right/step_length/robust_avg', 0.0))
-    rospy.loginfo("Average stride duration left: %.3f s, right: %.3f s", param_dict.get('/left/stride_duration/avg', 0.0), param_dict.get('/right/stride_duration/avg', 0.0))
-    rospy.loginfo("Average stride durobust left: %.3f s, right: %.3f s", param_dict.get('/left/stride_duration/robust_avg', 0.0), param_dict.get('/right/stride_duration/robust_avg', 0.0))
+    print_metrics(param_dict)
     
-
     # --- Write results to a new bag file ---
     estimator.write_to_bag(output_bag_path, param_dict)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# filepath: /home/docker/ros_ws/src/gait_parameters_estimation/gait_parameter_estimation/iterate_folder_and_estimate_gait.bash
+# filepath: /home/docker/ros_ws/src/gait_parameters_estimation/gait_parameters_estimation/iterate_folder_and_estimate_gait.bash
 
 # This script iterates over all .bag files in a specified directory,
 # runs toe detection to create an intermediate bag, and then runs

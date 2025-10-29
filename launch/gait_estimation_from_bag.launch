@@ -9,9 +9,11 @@
     <!-- <include if="$(arg launch_from_bag)" file="$(find gait_parameters_estimation)/launch/rviz_with_urdf.launch" /> -->
     
     <arg name="input_bag_path" default="/home/docker/ros_ws/data/toe_positions.bag" />
+    <arg name="output_bag_path" default="/home/docker/ros_ws/data/toe_positions.bag" />
 
     <node pkg="gait_parameters_estimation" name="gait_estimation" type="gait_estimation_from_bag.py" output="screen">
         <param name="input_bag_path" value="$(arg input_bag_path)" />
+        <param name="output_bag_path" value="$(arg output_bag_path)" />
     </node>
 
 </launch>

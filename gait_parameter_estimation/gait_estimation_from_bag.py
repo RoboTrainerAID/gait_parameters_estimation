@@ -764,8 +764,9 @@ if __name__ == '__main__':
     rospy.init_node('gait_estimation_from_bag')
 
     input_bag_path = rospy.get_param('~input_bag_path', '/home/docker/ros_ws/data/toe_positions.bag')
+    output_bag_path = rospy.get_param('~output_bag_path', '/home/docker/ros_ws/data/toe_positions_gait_output.bag')
     
-    output_bag_path = input_bag_path.replace('_toe_output.bag', '_gait_output.bag')
+    # output_bag_path = input_bag_path.replace('_toe_output.bag', '_gait_output.bag')
     topics = [
         '/tf',
         '/tf_static',

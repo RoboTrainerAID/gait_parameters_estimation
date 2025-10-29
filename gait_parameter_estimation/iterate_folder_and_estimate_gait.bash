@@ -9,8 +9,9 @@
 
 # --- Configuration ---
 # Set the default folder to search for bags if no argument is provided.
-INPUT_FOLDER="/home/docker/ros_ws/robotrainer/KATE_AA"
-OUTPUT_FOLDER="/home/docker/ros_ws/data/gait"
+INPUT_FOLDER="/home/docker/ros_ws/robotrainer/KATE_BO/bags/U005_ground_truth/raw"
+TOE_FOLDER="/home/docker/ros_ws/robotrainer/KATE_BO/bags/U005_ground_truth/toe"
+GAIT_FOLDER="/home/docker/ros_ws/robotrainer/KATE_BO/bags/U005_ground_truth/gait"
 
 # --- Script Logic ---
 # Check if the provided input folder exists
@@ -29,7 +30,7 @@ find "$INPUT_FOLDER" -type f -name "*.bag" ! -name "*_toe_output.bag" ! -name "*
     original_basename=$(basename "$original_bag")
     
     # Define the path for the final gait output file
-    gait_output_bag="$OUTPUT_FOLDER/${original_basename%.bag}_gait_output.bag"
+    gait_output_bag="$GAIT_FOLDER/${original_basename%.bag}_gait_output.bag"
 
     # Check if the final output file already exists in the output folder
     if [ -f "$gait_output_bag" ]; then
@@ -41,11 +42,12 @@ find "$INPUT_FOLDER" -type f -name "*.bag" ! -name "*_toe_output.bag" ! -name "*
     echo "Processing original file: $original_bag"
     
     # Define the output path for the toe detection step inside the output folder
-    toe_output_bag="$OUTPUT_FOLDER/${original_basename%.bag}_toe_output.bag"
+    toe_output_bag="$TOE_FOLDER/${original_basename%.bag}_toe_output.bag"
     
     # Create the output directory right before we need it.
     # 'mkdir -p' is safe to run multiple times.
-    mkdir -p "$OUTPUT_FOLDER"
+    mkdir -p "$GAIT_FOLDER"
+    mkdir -p "$TOE_FOLDER"
     
     # --- Step 1: Run Toe Detection with Kalman Filter ---
     echo "Running toe detection... Output will be: $toe_output_bag"
@@ -61,9 +63,9 @@ find "$INPUT_FOLDER" -type f -name "*.bag" ! -name "*_toe_output.bag" ! -name "*
     
     # --- Step 2: Run Gait Parameter Estimation ---
     # The python script will create its output file relative to the input path,
-    # so the gait_output.bag will also be saved in the OUTPUT_FOLDER.
-    echo "Running gait estimation on: $toe_output_bag"
-    roslaunch --wait gait_parameters_estimation gait_estimation_from_bag.launch input_bag_path:="$toe_output_bag"
+    # so the gait_output.bag will also be saved in the GAIT_FOLDER.
+    echo "Running gait estimation... Output will be: $gait_output_bag"
+    roslaunch --wait gait_parameters_estimation gait_estimation_from_bag.launch input_bag_path:="$toe_output_bag" output_bag_path:="$gait_output_bag"
     
     echo "Finished processing: $original_bag"
     echo "------------------------------------------------------------"
